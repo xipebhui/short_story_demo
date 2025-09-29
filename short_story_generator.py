@@ -130,7 +130,7 @@ class StoryContent:
                 start=d['start'],
                 end=d['end'],
                 chinese=d['chinese'],
-                english=d['english']
+                english=d['english'] if d['english'] else 'God bless you'
             )
             self.dialogue_list.append(dialogue_obj)
 
@@ -441,11 +441,15 @@ class ShortStoryGenerator:
             print(f"📝 开始为故事生成草稿: {story.story_title}")
 
             # 使用 DraftGenerator 的 generate_from_story 方法
-            used_video_path = video_path if video_path else "./input/test1.mp4"
+            if not os.path.exists(video_path):
+                print(f"❌ 视频文件不存在: {video_path}")
+                return None
+            
             draft_file = self.draft_generator.generate_from_story(
                 story=story,
-                video_path=used_video_path,
-                story_idx=story_idx
+                video_path=video_path,
+                story_idx=story_idx,
+                video_id=video_id
             )
 
             print(f"✅ 草稿文件生成完成: {draft_file}")
