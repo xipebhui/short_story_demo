@@ -5,6 +5,11 @@ import json
 import requests
 from typing import Optional
 from retry import retry
+from dotenv import load_dotenv
+import os
+
+# 默认加载当前目录下的 .env
+load_dotenv()
 
 # Configure logging with line numbers
 logging.basicConfig(
