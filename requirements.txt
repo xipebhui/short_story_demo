@@ -13,5 +13,5 @@ openai-whisper>=20231117
 yt-dlp
 
 
-typing-extensions>=4.0.0; python_version < "3.9"'dotenv
+typing-extensions>=4.0.0; python_version < "3.9"
 dotenv
