@@ -102,7 +102,6 @@ class TTSService:
 
     def generate(self, text: str, voice: str) -> tuple[bytes, str]:
         """生成语音，使用异步接口，返回音频数据和字幕文本"""
-        logger.info(f"开始生成TTS任务，文本长度: {len(text)}, 语音: {voice}")
 
         # 创建任务（异步接口会快速返回）
         url = f"{self.base_url}/api/v1/tts/create"
@@ -151,11 +150,9 @@ class TTSService:
                     srt_response = self.session.get(srt_download_url, timeout=30)
                     if srt_response.status_code == 200:
                         subtitle_text = srt_response.text
-                        logger.info(f"字幕下载成功，大小: {len(subtitle_text)} 字符")
                     else:
-                        logger.error(f"下载字幕失败: {srt_response.status_code}")
+                        logger.warning(f"下载字幕失败: {srt_response.status_code}")
                         # 使用 Whisper 作为兜底策略
-                        logger.info("尝试使用 Whisper 作为兜底策略生成字幕")
                         subtitle_text = self._whisper_audio_to_srt(audio_response.content)
                         if subtitle_text:
                             logger.info("Whisper 兜底策略成功生成字幕")
@@ -217,7 +214,7 @@ class TTSClient:
         # 保存音频文件
         with open(output_file, 'wb') as f:
             f.write(audio_data)
-        logger.info(f"音频文件保存成功: {output_file}")
+        
 
         # 保存字幕文件（如果有的话）
         subtitle_file = None
@@ -225,7 +222,7 @@ class TTSClient:
             subtitle_file = output_file.replace('.mp3', '.srt').replace('.wav', '.srt')
             with open(subtitle_file, 'w', encoding='utf-8') as f:
                 f.write(subtitle_text)
-            logger.info(f"字幕文件保存成功: {subtitle_file}")
+            
 
         return subtitle_file
 
