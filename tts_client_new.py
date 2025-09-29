@@ -14,6 +14,12 @@ from pydub import AudioSegment
 import subprocess
 import tempfile
 import shutil
+from dotenv import load_dotenv
+
+
+# 默认加载当前目录下的 .env
+load_dotenv()
+
 
 # 配置日志
 logging.basicConfig(
