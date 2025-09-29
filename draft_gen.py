@@ -32,9 +32,17 @@ import sys
 import uuid
 import shutil
 import copy
+import logging
 from pathlib import Path
-from pydub import AudioSegment
+from pydub import AudioSegment as PydubAudioSegment
 from typing import List, Dict, Optional
+
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(filename)s:%(lineno)d - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # 字幕模板加载函数
 def load_subtitle_templates_from_draft(template_file):
@@ -53,7 +61,7 @@ def load_subtitle_templates_from_draft(template_file):
 
         return texts_templates, track_template
     except Exception as e:
-        print(f"❌ 从草稿模板加载字幕失败: {e}")
+        logger.error(f"❌ 从草稿模板加载字幕失败: {e}")
         return [], None
 
 # 默认配置常量
@@ -149,11 +157,10 @@ def time_to_microseconds(time_str):
 def get_audio_duration(audio_path):
     """获取音频文件时长（秒）"""
     try:
-        
-        audio = AudioSegment.from_file(audio_path)
+        audio = PydubAudioSegment.from_file(audio_path)
         return len(audio) / 1000.0
     except Exception as e:
-        print(f"无法获取音频时长 {audio_path}: {e}")
+        logger.error(f"无法获取音频时长 {audio_path}: {e}")
         return 1.0  # 返回默认时长避免除零错误
 
 
@@ -181,11 +188,11 @@ def calculate_speed_factor(original_duration_seconds):
     # 确保速度至少为1.0（不能慢于原速）
     final_speed = max(final_speed, 1.0)
 
-    print(f"原始时长: {original_duration_seconds:.1f}s")
-    print(f"目标时长: {TARGET_DURATION_SECONDS:.1f}s")
-    print(f"按时间计算需要速度: {required_speed:.2f}x")
-    print(f"最终使用速度: {final_speed:.2f}x")
-    print(f"实际输出时长: {original_duration_seconds / final_speed:.1f}s")
+    logger.info(f"原始时长: {original_duration_seconds:.1f}s")
+    logger.info(f"目标时长: {TARGET_DURATION_SECONDS:.1f}s")
+    logger.info(f"按时间计算需要速度: {required_speed:.2f}x")
+    logger.info(f"最终使用速度: {final_speed:.2f}x")
+    logger.info(f"实际输出时长: {original_duration_seconds / final_speed:.1f}s")
 
     return final_speed
 
@@ -404,16 +411,16 @@ class DraftGenerator:
         # 从草稿模板文件中加载字幕模板
         material_templates, track_template = load_subtitle_templates_from_draft(self.template_file)
         if not material_templates or not track_template:
-            print("❌ 无字幕模板，跳过字幕生成")
+            logger.warning("❌ 无字幕模板，跳过字幕生成")
             return [], [], []
 
-        print(f"✓ 加载字幕模板: {len(material_templates)} 个材料模板")
+        logger.info(f"✓ 加载字幕模板: {len(material_templates)} 个材料模板")
 
         # 确定处理的字幕数量
         process_count = len(segments_info)
         if SUBTITLE_DEBUG_MODE:
             process_count = min(DEBUG_SUBTITLE_LIMIT, len(segments_info))
-            print(f"🔧 字幕调试模式：只处理前 {process_count} 个字幕")
+            logger.info(f"🔧 字幕调试模式：只处理前 {process_count} 个字幕")
 
         # 创建字幕轨道（基于模板）
         subtitle_track = copy.deepcopy(track_template)
@@ -427,12 +434,12 @@ class DraftGenerator:
 
             # 只处理有SRT文件的对话，加载SRT文件获取逐字字幕
             if not dialogue_obj.srt_path or not os.path.exists(dialogue_obj.srt_path):
-                print(f"⚠️ 跳过对话 {dialogue_obj.index}：没有SRT文件")
+                logger.warning(f"⚠️ 跳过对话 {dialogue_obj.index}：没有SRT文件")
                 continue
 
             srt_subtitles = self._load_srt_file(dialogue_obj.srt_path)
             if not srt_subtitles:
-                print(f"⚠️ 跳过对话 {dialogue_obj.index}：SRT文件为空")
+                logger.warning(f"⚠️ 跳过对话 {dialogue_obj.index}：SRT文件为空")
                 continue
 
             # 获取当前音频片段的目标起始时间（微秒）
@@ -467,7 +474,7 @@ class DraftGenerator:
 
                     subtitle_material['content'] = json.dumps(content_obj, ensure_ascii=False)
                 except Exception as e:
-                    print(f"⚠️ 字幕内容解析失败: {e}")
+                    logger.warning(f"⚠️ 字幕内容解析失败: {e}")
                     continue
 
                 subtitle_materials.append(subtitle_material)
@@ -503,7 +510,7 @@ class DraftGenerator:
         if subtitle_track['segments']:
             subtitle_tracks.append(subtitle_track)
 
-        print(f"✓ 生成字幕: {len(subtitle_materials)} 个材料, {len(subtitle_tracks)} 个轨道")
+        logger.info(f"✓ 生成字幕: {len(subtitle_materials)} 个材料, {len(subtitle_tracks)} 个轨道")
         return subtitle_materials, [], subtitle_tracks
 
     def _load_srt_file(self, srt_path):
@@ -529,7 +536,7 @@ class DraftGenerator:
                         })
             return entries
         except Exception as e:
-            print(f"❌ 加载SRT文件失败 {srt_path}: {e}")
+            logger.error(f"❌ 加载SRT文件失败 {srt_path}: {e}")
             return []
 
     def _srt_time_to_microseconds(self, srt_time):
@@ -540,7 +547,7 @@ class DraftGenerator:
             total_microseconds = (hours * 3600 + minutes * 60 + seconds) * 1000000 + int(milliseconds) * 1000
             return total_microseconds
         except Exception as e:
-            print(f"❌ 时间转换错误: {e}")
+            logger.error(f"❌ 时间转换错误: {e}")
             return 0
 
     def _clean_subtitle_text(self, text):
@@ -602,7 +609,7 @@ class DraftGenerator:
         if 'texts' not in nested_draft['materials']:
             nested_draft['materials']['texts'] = []
         else:
-            print(f"🧹 清理旧字幕材料: {len(nested_draft['materials']['texts'])} 个")
+            logging.info(f"🧹 清理旧字幕材料: {len(nested_draft['materials']['texts'])} 个")
             nested_draft['materials']['texts'].clear()
 
         # 2. 添加新的字幕材料
@@ -617,7 +624,7 @@ class DraftGenerator:
             # 清理现有字幕轨道的segments
             for track in text_tracks:
                 old_segments_count = len(track.get('segments', []))
-                print(f"🧹 清理轨道 {track.get('id', '')[:8]}... 的旧片段: {old_segments_count} 个")
+                logging.info(f"🧹 清理轨道 {track.get('id', '')[:8]}... 的旧片段: {old_segments_count} 个")
                 track['segments'] = []
 
             # 将新字幕片段添加到第一个字幕轨道
@@ -625,14 +632,14 @@ class DraftGenerator:
                 target_track = text_tracks[0]
                 new_segments = nested_data['subtitle_tracks'][0]['segments']
                 target_track['segments'].extend(new_segments)
-                print(f"✓ 在原轨道上添加了 {len(new_segments)} 个新字幕片段")
+                logging.info(f"✓ 在原轨道上添加了 {len(new_segments)} 个新字幕片段")
         else:
             # 如果没有现有字幕轨道，直接添加新轨道
             for subtitle_track in nested_data['subtitle_tracks']:
                 nested_draft['tracks'].append(subtitle_track)
-            print(f"✓ 添加了 {len(nested_data['subtitle_tracks'])} 个新字幕轨道")
+            logging.info(f"✓ 添加了 {len(nested_data['subtitle_tracks'])} 个新字幕轨道")
 
-        print(f"✓ 字幕更新完成: {len(nested_data['subtitle_materials'])} 个材料")
+        logging.info(f"✓ 字幕更新完成: {len(nested_data['subtitle_materials'])} 个材料")
 
     def _update_main_title_text(self, draft, story_title, total_duration):
         """更新主轴的标题文本内容和时长"""
@@ -657,7 +664,7 @@ class DraftGenerator:
                                 style['range'] = [0, text_length]
 
                     text_material['content'] = json.dumps(content_obj, ensure_ascii=False)
-                    print(f"✓ 更新主轴标题文本: \"{formatted_title.replace(chr(10), ' / ')}\"")
+                    logging.info(f"✓ 更新主轴标题文本: \"{formatted_title.replace(chr(10), ' / ')}\"")
 
             # 更新主轴文本轨道的时长
             main_tracks = [t for t in draft.get('tracks', []) if t.get('type') == 'text']
@@ -671,14 +678,14 @@ class DraftGenerator:
                         segment['target_timerange']['duration'] = total_duration
                     if 'source_timerange' in segment and segment['source_timerange'] is not None:
                         segment['source_timerange']['duration'] = total_duration
-                    print(f"✓ 更新主轴标题时长: {total_duration / 1000000:.3f}秒")
+                    logging.info(f"✓ 更新主轴标题时长: {total_duration / 1000000:.3f}秒")
 
         except Exception as e:
-            print(f"⚠️ 更新主轴标题失败: {e}")
+            logging.info(f"⚠️ 更新主轴标题失败: {e}")
 
     def generate_from_file(self, enhanced_srt_file: str, video_path: str) -> str:
         """从文件生成草稿，先转换为 StoryContent 对象"""
-        print(f"开始从文件生成草稿: {enhanced_srt_file}")
+        logging.info(f"开始从文件生成草稿: {enhanced_srt_file}")
 
         # 读取文件数据
         with open(enhanced_srt_file, 'r', encoding='utf-8') as f:
@@ -697,12 +704,12 @@ class DraftGenerator:
         else:
             raise ValueError(f"不支持的文件格式: {enhanced_srt_file}")
 
-        print(f"成功转换为故事对象: {story.story_title}")
+        logging.info(f"成功转换为故事对象: {story.story_title}")
         return self.generate_from_story(story, video_path, 0)
 
     def generate_from_story(self, story: StoryContent, video_path: str, story_idx: int = 0, video_id: str = None) -> str:
         """从 StoryContent 对象生成草稿，直接使用对象"""
-        print(f"开始为故事生成草稿: {story.story_title}")
+        logging.info(f"开始为故事生成草稿: {story.story_title}")
 
         # 更新输出目录，为每个故事创建独立的目录
         story_output_dir = os.path.join(self.output_dir, f"{video_id}_story_{story_idx + 1}_{story.story_title.replace(' ', '_')[:20]}")
@@ -713,10 +720,10 @@ class DraftGenerator:
         """内部草稿生成方法，直接使用 StoryContent 对象"""
         output_dir = custom_output_dir or self.output_dir
 
-        print(f"开始生成简化版复合草稿...")
-        print(f"模板文件: {self.template_file}")
+        logging.info(f"开始生成简化版复合草稿...")
+        logging.info(f"模板文件: {self.template_file}")
         if self.background_audio_path:
-            print(f"背景音频: {self.background_audio_path}")
+            logging.info(f"背景音频: {self.background_audio_path}")
 
         # 读取模板文件
         with open(self.template_file, 'r', encoding='utf-8') as f:
@@ -724,8 +731,8 @@ class DraftGenerator:
 
         # 统计有语音文件的对话数量
         audio_dialogues_count = sum(1 for d in story.dialogue_list if d.audio_path)
-        print(f"处理故事: {story.story_title}")
-        print(f"总对话数: {len(story.dialogue_list)}, 有语音的对话: {audio_dialogues_count}")
+        logging.info(f"处理故事: {story.story_title}")
+        logging.info(f"总对话数: {len(story.dialogue_list)}, 有语音的对话: {audio_dialogues_count}")
 
         # 创建嵌套草稿数据
         nested_data = self.create_nested_draft_simple(story, video_path)
@@ -896,9 +903,9 @@ class DraftGenerator:
 
         if not video_dest.exists():
             shutil.copy2(video_src, video_dest)
-            print(f"复制视频文件: {video_dest}")
+            logging.info(f"复制视频文件: {video_dest}")
         else:
-            print(f"视频文件已存在: {video_dest}")
+            logging.info(f"视频文件已存在: {video_dest}")
 
         # 复制音频文件
         for dialogue in story.dialogue_list:
@@ -907,7 +914,7 @@ class DraftGenerator:
                 audio_dest = materials_dir / os.path.basename(dialogue.audio_path)
                 if not audio_dest.exists():
                     shutil.copy2(audio_src, audio_dest)
-                    print(f"复制音频文件: {audio_dest}")
+                    logging.info(f"复制音频文件: {audio_dest}")
 
         # 复制背景音频
         if self.background_audio_path:
@@ -915,7 +922,7 @@ class DraftGenerator:
             bg_audio_dest = materials_dir / os.path.basename(self.background_audio_path)
             if not bg_audio_dest.exists():
                 shutil.copy2(bg_audio_src, bg_audio_dest)
-                print(f"复制背景音频文件: {bg_audio_dest}")
+                logging.info(f"复制背景音频文件: {bg_audio_dest}")
 
         # 复制模板设置文件
         settings_src = Path(DEFAULT_TEMPLATE_SETTINGS)
@@ -923,7 +930,7 @@ class DraftGenerator:
             settings_dest = output_path / "draft_settings"
             if not settings_dest.exists():
                 shutil.copy2(settings_src, settings_dest)
-                print(f"复制模板设置文件: {settings_dest}")
+                logging.info(f"复制模板设置文件: {settings_dest}")
 
         # 复制模板信息文件
         info_src = Path(DEFAULT_TEMPLATE_INFO_FILE)
@@ -931,14 +938,14 @@ class DraftGenerator:
             info_dest = output_path / "draft_meta_info.json"
             if not info_dest.exists():
                 shutil.copy2(info_src, info_dest)
-                print(f"复制模板信息文件: {info_dest}")
+                logging.info(f"复制模板信息文件: {info_dest}")
 
         # 保存草稿文件
         draft_file = output_path / "draft_content.json"
         with open(draft_file, 'w', encoding='utf-8') as f:
             json.dump(draft, f, ensure_ascii=False, separators=(',', ':'))
 
-        print(f"✓ 简化版复合草稿生成完成: {draft_file}")
+        logging.info(f"✓ 简化版复合草稿生成完成: {draft_file}")
         return str(draft_file)
 
 
@@ -948,7 +955,7 @@ def generate_simple_composite_draft(enhanced_srt_file, video_path, template_file
                                    speed_factor=None, background_audio_path=None):
     """向后兼容的函数接口，speed_factor 参数已废弃，改为动态计算"""
     if speed_factor is not None:
-        print(f"⚠️  警告: speed_factor 参数已废弃，现在根据视频时长动态计算速度")
+        logging.info(f"⚠️  警告: speed_factor 参数已废弃，现在根据视频时长动态计算速度")
 
     generator = DraftGenerator(
         template_file=template_file,
@@ -964,7 +971,7 @@ def generate_simple_composite_draft(enhanced_srt_file, video_path, template_file
 
 def main():
     if len(sys.argv) < 3:
-        print(
+        logging.info(
             "用法: python draft_gen.py <enhanced_srt_file> <video_path>")
         sys.exit(1)
 
@@ -975,11 +982,11 @@ def main():
         # 使用新的面向对象接口
         generator = DraftGenerator()
         result = generator.generate_from_file(enhanced_srt_file, video_path)
-        print(f"简化版复合草稿生成成功: {result}")
+        logging.info(f"简化版复合草稿生成成功: {result}")
     except Exception as e:
-        print(f"生成简化版复合草稿失败: {e}")
+        logging.info(f"生成简化版复合草稿失败: {e}")
         import traceback
-        traceback.print_exc()
+        traceback.logging.info_exc()
         sys.exit(1)
 
 

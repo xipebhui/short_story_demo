@@ -27,6 +27,7 @@ logging.basicConfig(
     format='%(asctime)s [%(levelname)s] %(filename)s:%(lineno)d - %(message)s'
 )
 logger = logging.getLogger(__name__)
+logging.getLogger('urllib3').disabled = True
 
 
 class TTSService:
