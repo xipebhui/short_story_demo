@@ -700,12 +700,12 @@ class DraftGenerator:
         print(f"成功转换为故事对象: {story.story_title}")
         return self.generate_from_story(story, video_path, 0)
 
-    def generate_from_story(self, story: StoryContent, video_path: str, story_idx: int = 0) -> str:
+    def generate_from_story(self, story: StoryContent, video_path: str, story_idx: int = 0, video_id: str = None) -> str:
         """从 StoryContent 对象生成草稿，直接使用对象"""
         print(f"开始为故事生成草稿: {story.story_title}")
 
         # 更新输出目录，为每个故事创建独立的目录
-        story_output_dir = os.path.join(self.output_dir, f"story_{story_idx + 1}_{story.story_title.replace(' ', '_')[:20]}")
+        story_output_dir = os.path.join(self.output_dir, f"{video_id}_story_{story_idx + 1}_{story.story_title.replace(' ', '_')[:20]}")
 
         return self._generate_draft_internal(story, video_path, story_output_dir)
 

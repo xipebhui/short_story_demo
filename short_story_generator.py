@@ -11,6 +11,8 @@ from datetime import datetime
 from typing import List, Dict, Optional
 
 
+PROJECT_CACHE_DIR = './output/project_cache'
+
 sys_prompt = """
 用户输入的是一个 srt 文件，最高指令是 srt 中的时间戳信息是不能变化的 。 
 根据故事情节对这个文案进行切割，要求切割的故事是合理的，不能很突兀的就结束，如果最开头或者后面的一段是突然结束的，就可以不需要不完整的部分，输出切割后的每个故事，
@@ -236,12 +238,13 @@ class ShortStoryGenerator:
             return None
 
     def process_story_for_segment(self, story: StoryContent, story_idx: int, video_segment: VideoSegment):
+        video_id = video_segment.url.split("/")[-1].split("?")[0]
         """为视频段中的故事生成语音和草稿"""
         try:
-            print(f"🎤 处理视频段 {video_segment.segment_index} 的故事 {story_idx + 1}: {story.story_title}")
+            print(f"🎤 处理视频段 {video_id}:{video_segment.segment_index} 的故事 {story_idx + 1}: {story.story_title}")
 
             # 创建输出目录
-            base_filename = f"segment_{video_segment.segment_index}"
+            base_filename = f"{video_id}_segment_{video_segment.segment_index}"
             output_dir = f"./output/tmp_voice/{base_filename}"
             if not os.path.exists(output_dir):
                 os.makedirs(output_dir)
@@ -250,7 +253,7 @@ class ShortStoryGenerator:
             processed_story = self.process_single_story_audio(story, story_idx, output_dir)
 
             # 生成草稿文件
-            self.generate_draft_file(processed_story, story_idx, video_segment.org_video_file_path)
+            self.generate_draft_file(processed_story, story_idx, video_segment.org_video_file_path, video_id)
 
             print(f"✅ 故事处理完成: {story.story_title}")
 
@@ -261,8 +264,8 @@ class ShortStoryGenerator:
         """保存视频项目到缓存文件"""
         try:
             # 生成缓存文件路径
-            url_safe = video_project.url.replace("/", "_").replace(":", "_")
-            cache_file = f"./output/video_project_{url_safe}_{int(video_project.project_created_time.timestamp())}.json"
+            url_safe = video_project.url.split("/")[-1].split("?")[0]
+            cache_file = f"{PROJECT_CACHE_DIR}/{url_safe}_{int(video_project.project_created_time.timestamp())}.json"
 
             # 保存到文件
             with open(cache_file, 'w', encoding='utf-8') as f:
@@ -432,7 +435,7 @@ class ShortStoryGenerator:
         print(f"✅ 故事 '{story.story_title}' 语音处理完成!")
         return story
 
-    def generate_draft_file(self, story: 'StoryContent', story_idx: int, video_path: str = None) -> str:
+    def generate_draft_file(self, story: 'StoryContent', story_idx: int, video_path: str = None, video_id: str = None) -> str:
         """为单个故事生成草稿文件"""
         try:
             print(f"📝 开始为故事生成草稿: {story.story_title}")
