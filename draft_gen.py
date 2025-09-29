@@ -712,7 +712,7 @@ class DraftGenerator:
         logging.info(f"开始为故事生成草稿: {story.story_title}")
 
         # 更新输出目录，为每个故事创建独立的目录
-        story_output_dir = os.path.join(self.output_dir, f"{video_id}_story_{story_idx + 1}_{story.story_title.replace(' ', '_')[:20]}")
+        story_output_dir = os.path.join(self.output_dir, f"{video_id}_story_{story_idx + 1}_{story.story_title.replace(' ', '_').replace(':', '')[:10]}")
 
         return self._generate_draft_internal(story, video_path, story_output_dir)
 
