@@ -279,66 +279,49 @@ class VideoDownloader:
         if not ENABLE_CACHE_CHECK:
             return []
 
-        # 根据URL生成预期的文件名
+        # 从URL提取文件名
         title = url.split("/")[-1].split("?")[0]
-        video_extensions = ['*.mp4', '*.mkv', '*.webm', '*.avi', '*.mov']
-        video_files = []
-
-        for ext in video_extensions:
-            video_files.extend(glob.glob(os.path.join(self.output_dir, ext)))
-
-        if not video_files:
+        
+        # 预期的文件路径
+        expected_video = os.path.join(self.output_dir, f"{title}.mp4")
+        expected_audio = os.path.join(self.output_dir, f"{title}.wav")
+        
+        # 检查基本文件是否存在
+        if not (os.path.exists(expected_video) and os.path.exists(expected_audio)):
             return []
-
-        # 查找最匹配的视频文件
-        video_file = None
-        for vf in video_files:
-            if title in os.path.basename(vf):
-                video_file = vf
-                break
-
-        if not video_file:
-            video_file = max(video_files, key=os.path.getctime)
-
-        # 检查对应的音频文件
-        base_name = os.path.splitext(os.path.basename(video_file))[0]
-        audio_file = os.path.join(self.output_dir, f"{base_name}.wav")
-
-        if not os.path.exists(audio_file):
-            return []
-
-        # 检查是否存在切割的段落文件
-        video_segments = glob.glob(os.path.join(self.output_dir, f"{base_name}_part*.mp4"))
-        audio_segments = glob.glob(os.path.join(self.output_dir, f"{base_name}_part*.wav"))
-
+        
+        self.logger.info(f"找到缓存文件: {title}.mp4, {title}.wav")
+        
+        # 检查是否有切割的段落文件
+        video_segments = glob.glob(os.path.join(self.output_dir, f"{title}_part*.mp4"))
+        audio_segments = glob.glob(os.path.join(self.output_dir, f"{title}_part*.wav"))
+        
         if video_segments and audio_segments and len(video_segments) == len(audio_segments):
-            # 返回现有的段落信息
+            # 返回切割的段落
             media_segments = []
             for i, (video_seg, audio_seg) in enumerate(zip(sorted(video_segments), sorted(audio_segments)), 1):
-                segment_dict = {
+                media_segments.append({
                     "url": url,
                     "org_video_file_path": video_seg,
                     "org_audio_file_path": audio_seg,
                     "segment_index": i,
                     "start_time": "缓存文件",
                     "duration": "缓存文件"
-                }
-                media_segments.append(segment_dict)
-
-            self.logger.info(f"发现缓存文件，共 {len(media_segments)} 个媒体段")
+                })
+            
+            self.logger.info(f"发现缓存切割文件，共 {len(media_segments)} 个段落")
             return media_segments
-        elif os.path.exists(video_file) and os.path.exists(audio_file):
-            # 返回单个文件信息
+        else:
+            # 返回单个完整文件
+            self.logger.info("发现缓存完整文件")
             return [{
                 "url": url,
-                "org_video_file_path": video_file,
-                "org_audio_file_path": audio_file,
+                "org_video_file_path": expected_video,
+                "org_audio_file_path": expected_audio,
                 "segment_index": 1,
                 "start_time": "00:00:00.000",
                 "duration": "缓存文件"
             }]
-
-        return []
 
     def process_video(self, url: str) -> List[dict]:
         """
