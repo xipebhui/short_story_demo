@@ -37,8 +37,8 @@ class SRTGenerator:
             self.logger.info(f"发现缓存文件，跳过转录: {srt_output}")
             return srt_output
 
-        # 加载模型
-        model = whisper.load_model("base")
+        # 加载模型  small medium
+        model = whisper.load_model("medium")
         self.logger.info("Whisper 模型已加载")
 
         self.logger.info("正在转录音频，请稍候...")

@@ -72,9 +72,6 @@ class VideoDownloader:
 
         returncode, stdout, stderr = self._run_command(cmd)
 
-        if returncode != 0:
-            self.logger.error(f"Failed to get audio duration: {stderr}")
-            return 0.0
 
         try:
             probe_data = json.loads(stdout)

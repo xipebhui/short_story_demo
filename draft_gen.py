@@ -149,8 +149,8 @@ def time_to_microseconds(time_str):
 def get_audio_duration(audio_path):
     """获取音频文件时长（秒）"""
     try:
-        from pydub import AudioSegment as AS
-        audio = AS.from_file(audio_path)
+        
+        audio = AudioSegment.from_file(audio_path)
         return len(audio) / 1000.0
     except Exception as e:
         print(f"无法获取音频时长 {audio_path}: {e}")
