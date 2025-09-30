@@ -32,6 +32,7 @@ import sys
 import uuid
 import shutil
 import copy
+import re
 import logging
 from pathlib import Path
 from pydub import AudioSegment as PydubAudioSegment
@@ -688,12 +689,26 @@ class DraftGenerator:
         logging.info(f"成功转换为故事对象: {story.story_title}")
         return self.generate_from_story(story, video_path, 0)
 
+    def sanitize_filename(self, filename: str) -> str:
+        """清理文件名，移除 Windows 不允许的字符，保留 # 字符"""
+        # Windows 不允许的字符: < > : " / \ | ? *
+        # 保留 # 字符，同时移除控制字符
+        invalid_chars = r'[<>:"/\\|?*\x00-\x1f]'
+        sanitized = re.sub(invalid_chars, '', filename)
+        # 移除前后空格和点
+        sanitized = sanitized.strip('. ')
+        # 如果清理后为空，使用默认名称
+        return sanitized if sanitized else 'untitled'
+
     def generate_from_story(self, story: StoryContent, video_path: str, story_idx: int = 0, video_id: str = None) -> str:
         """从 StoryContent 对象生成草稿，直接使用对象"""
         logging.info(f"开始为故事生成草稿: {story.story_title}")
 
+        # 清理故事标题，移除不安全字符（保留完整标题，不截断）
+        safe_title = self.sanitize_filename(story.story_title.replace(' ', '_'))
+
         # 更新输出目录，为每个故事创建独立的目录
-        story_output_dir = os.path.join(self.output_dir, f"{video_id}_story_{story_idx + 1}_{story.story_title.replace(' ', '_').replace(':', '')[:10]}")
+        story_output_dir = os.path.join(self.output_dir, f"{video_id}_story_{story_idx + 1}_{safe_title}")
 
         return self._generate_draft_internal(story, video_path, story_output_dir)
 

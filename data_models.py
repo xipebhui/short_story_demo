@@ -42,6 +42,7 @@ class StoryContent:
         self.start_index = start_index
         self.end_index = end_index
         self.dialogue_list: List[StoryDialogue] = []
+        self.exported_video_path: Optional[str] = None  # 导出视频路径
 
         # 将字典数据转换为 StoryDialogue 对象
         for d in dialogue:
@@ -58,7 +59,8 @@ class StoryContent:
             'story_title': self.story_title,
             'start_index': self.start_index,
             'end_index': self.end_index,
-            'dialogue': [d.to_dict() for d in self.dialogue_list]
+            'dialogue': [d.to_dict() for d in self.dialogue_list],
+            'exported_video_path': self.exported_video_path
         }
 
 

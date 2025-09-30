@@ -6,6 +6,7 @@ from dl_splitter_video import VideoDownloader
 from srt_generate import JSONSubtitleGenerator
 from data_models import StoryDialogue, StoryContent, VideoSegment, VideoProject
 from jy_export import VideoExporter
+from spliter_export_video import VideoSplitter
 import sys
 import json
 import os
@@ -126,6 +127,9 @@ class ShortStoryGenerator:
         # 初始化视频导出器
         self.video_exporter = VideoExporter()
 
+        # 初始化视频切割器
+        self.video_splitter = VideoSplitter()
+
     def generate(self, url: str) -> Optional[VideoProject]:
         logging.info(f"🎬 开始处理视频URL: {url}")
 
@@ -171,10 +175,18 @@ class ShortStoryGenerator:
                         for story_idx, story in enumerate(stories):
                             self.process_story_for_segment(story, story_idx, video_segment)
 
+                            # 处理完每个故事后立即更新缓存
+                            self.save_project_to_cache(video_project)
+
                 video_project.add_segment(video_segment)
 
-            # 保存项目结果
-            self.save_project_to_cache(video_project)
+            # 保存最终项目结果
+            cache_file = self.save_project_to_cache(video_project)
+
+            # 切割导出的视频
+            if cache_file:
+                logging.info(f"✂️ 开始切割导出的视频...")
+                self.video_splitter.process(cache_file)
 
             logging.info(f"✅ 视频处理完成！共处理 {len(video_project.segments)} 个视频段")
             return video_project
@@ -225,7 +237,10 @@ class ShortStoryGenerator:
 
             # 导出草稿为视频
             if draft_file:
-                self.export_draft_video(draft_file)
+                exported_video_path = self.export_draft_video(draft_file)
+                if exported_video_path:
+                    # 保存导出视频路径到 story 对象
+                    processed_story.exported_video_path = exported_video_path
 
             logging.info(f"✅ 故事处理完成: {story.story_title}")
 
