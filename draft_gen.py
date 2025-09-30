@@ -16,14 +16,14 @@ ENABLE_CHINESE_SUBTITLES = False
 ENABLE_ENGLISH_SUBTITLES = True
 
 # 调试模式下的字幕数量限制
-DEBUG_SUBTITLE_LIMIT = 2
+DEBUG_SUBTITLE_LIMIT = 10
 
 # ================== 速度控制配置 ==================
 # 目标视频时长（秒）- 控制最终视频在1分钟内
-TARGET_DURATION_SECONDS = 59.0
+TARGET_DURATION_SECONDS = 60
 
 # 最大播放速度倍数 - 限制最大速度为2.5倍
-MAX_SPEED_FACTOR = 2.0
+MAX_SPEED_FACTOR = 1.5
 # ================================================
 
 import json
@@ -36,6 +36,7 @@ import logging
 from pathlib import Path
 from pydub import AudioSegment as PydubAudioSegment
 from typing import List, Dict, Optional
+from data_models import StoryDialogue, StoryContent
 
 # 配置日志
 logging.basicConfig(
@@ -75,58 +76,7 @@ DEFAULT_GAP = 0
 DEFAULT_BLUR_STRENGTH = 0.375
 DEFAULT_BACKGROUND_AUDIO_PATH = "./templates/jazz.wav"
 
-# 故事对象类（独立于 short_story_generator.py）
-class StoryDialogue:
-    def __init__(self, index: int, start: str, end: str, chinese: str, english: str):
-        self.index = index
-        self.start = start
-        self.end = end
-        self.chinese = chinese
-        self.english = english
-        self.audio_path: Optional[str] = None
-        self.srt_path: Optional[str] = None
-
-    def to_dict(self) -> Dict:
-        return {
-            'index': self.index,
-            'start': self.start,
-            'end': self.end,
-            'chinese': self.chinese,
-            'english': self.english,
-            'audio_path': self.audio_path,
-            'srt_path': self.srt_path
-        }
-
-class StoryContent:
-    def __init__(self, story_title: str, start_time: str, end_time: str, dialogue: List[Dict]):
-        self.story_title = story_title
-        self.start_time = start_time
-        self.end_time = end_time
-        self.dialogue_list: List[StoryDialogue] = []
-
-        # 将字典数据转换为 StoryDialogue 对象
-        for d in dialogue:
-            dialogue_obj = StoryDialogue(
-                index=d['index'],
-                start=d['start'],
-                end=d['end'],
-                chinese=d['chinese'],
-                english=d['english']
-            )
-            # 如果有语音路径信息，也要赋值
-            if 'audio_path' in d:
-                dialogue_obj.audio_path = d['audio_path']
-            if 'srt_path' in d:
-                dialogue_obj.srt_path = d['srt_path']
-            self.dialogue_list.append(dialogue_obj)
-
-    def to_dict(self) -> Dict:
-        return {
-            'story_title': self.story_title,
-            'start_time': self.start_time,
-            'end_time': self.end_time,
-            'dialogue': [d.to_dict() for d in self.dialogue_list]
-        }
+# 故事对象类已从 data_models.py 导入
 
 
 def time_to_microseconds(time_str):
@@ -263,49 +213,59 @@ class DraftGenerator:
 
 
     def create_nested_draft_simple(self, story: StoryContent, video_path: str):
-        """创建简化的嵌套草稿，直接与 StoryContent 对象交互"""
+        """创建简化的嵌套草稿 - 支持一个音频对应多个视频片段"""
         # 计算总时长
         current_time = 0.0
         segments_info = []
 
         for dialogue in story.dialogue_list:
-            # 如果没有语音文件，创建虚拟音频信息用于字幕处理
+            # 如果没有语音文件，跳过（或创建虚拟音频用于字幕处理）
             if not dialogue.audio_path:
-                # 计算对话时长作为虚拟音频时长
-                source_start_seconds = time_to_microseconds(dialogue.start) / 1000000.0
-                source_end_seconds = time_to_microseconds(dialogue.end) / 1000000.0
-                audio_duration = source_end_seconds - source_start_seconds
-
-                segments_info.append({
-                    'target_start': current_time,
-                    'audio_duration': audio_duration,
-                    'source_start': source_start_seconds,
-                    'source_duration': audio_duration,
-                    'audio_path': None,  # 标记为虚拟音频
-                    'dialogue_obj': dialogue
-                })
-
-                current_time += audio_duration
+                logger.warning(f"⚠️ Dialogue {dialogue.index} 没有音频文件，跳过")
                 continue
 
             current_time += self.gap
+
+            # 🔑 获取音频时长
             audio_duration = get_audio_duration(dialogue.audio_path)
 
-            # 计算源视频时间
-            source_start_seconds = time_to_microseconds(dialogue.start) / 1000000.0
-            source_end_seconds = time_to_microseconds(dialogue.end) / 1000000.0
-            source_duration = source_end_seconds - source_start_seconds
+            # 🔑 计算所有视频片段的总时长
+            total_video_duration = 0.0
+            for video_seg in dialogue.video_segments:
+                start_seconds = time_to_microseconds(video_seg['start']) / 1000000.0
+                end_seconds = time_to_microseconds(video_seg['end']) / 1000000.0
+                total_video_duration += (end_seconds - start_seconds)
 
-            segments_info.append({
-                'target_start': current_time,
-                'audio_duration': audio_duration,
-                'source_start': source_start_seconds,
-                'source_duration': source_duration,
-                'audio_path': dialogue.audio_path,
-                'dialogue_obj': dialogue  # 保存对象引用
-            })
+            if total_video_duration == 0:
+                logger.warning(f"⚠️ Dialogue {dialogue.index} 的视频片段总时长为0，跳过")
+                continue
 
-            current_time += audio_duration
+            # 🔑 计算视频速度（使视频总时长匹配音频时长）
+            video_speed = total_video_duration / max(audio_duration, 0.1)
+            logger.info(f"  📊 Dialogue {dialogue.index}: 音频={audio_duration:.2f}s, 视频={total_video_duration:.2f}s, 速度={video_speed:.2f}x")
+
+            # 🔑 为每个视频片段创建 segment_info
+            for video_seg_idx, video_seg in enumerate(dialogue.video_segments):
+                source_start_seconds = time_to_microseconds(video_seg['start']) / 1000000.0
+                source_end_seconds = time_to_microseconds(video_seg['end']) / 1000000.0
+                source_duration = source_end_seconds - source_start_seconds
+
+                # 计算调整后的视频片段时长（应用速度后）
+                adjusted_duration = source_duration / video_speed
+
+                segments_info.append({
+                    'target_start': current_time,
+                    'audio_duration': adjusted_duration,  # 调整后的时长
+                    'source_start': source_start_seconds,
+                    'source_duration': source_duration,
+                    'audio_path': dialogue.audio_path,  # 共享同一音频
+                    'video_speed': video_speed,  # 🆕 视频速度
+                    'dialogue_obj': dialogue,
+                    'video_seg_idx': video_seg_idx,  # 当前是第几个视频片段
+                    'total_video_segs': len(dialogue.video_segments)  # 总共多少个视频片段
+                })
+
+                current_time += adjusted_duration
 
         total_duration = int(current_time * 1000000)
 
@@ -326,68 +286,85 @@ class DraftGenerator:
             "upper_right_y": 0.0
         }
 
-        for i, info in enumerate(segments_info):
-            # 跳过虚拟音频（只用于字幕处理）
+        # 🔑 音频材料去重（多个视频片段共享同一音频）
+        audio_path_to_material_id = {}
+        audio_path_to_info = {}  # 存储每个音频的第一个片段信息
+
+        for info in segments_info:
             if info['audio_path'] is None:
                 continue
 
-            # 材料ID
+            # 视频材料（每个视频片段独立）
             video_id = generate_uuid()
-            audio_id = generate_uuid()
-
-            # 使用原始视频文件名
             video_file_name = os.path.basename(video_path)
 
-            # 创建视频材料对象
             video_material = VideoMaterial(
                 material_id=video_id,
                 material_name=video_file_name,
                 path=f"##_draftpath_placeholder_0E685133-18CE-45ED-8CB8-2904A212EC80_##/materials/{video_file_name}",
-                duration=44733333,  # 会被实际时长覆盖
+                duration=44733333,
                 crop=crop_config
             )
             video_materials.append(video_material)
 
-            # 创建音频材料对象
-            audio_material = AudioMaterial(
-                material_id=audio_id,
-                name=os.path.basename(info['audio_path']),
-                path=f"##_draftpath_placeholder_0E685133-18CE-45ED-8CB8-2904A212EC80_##/materials/{os.path.basename(info['audio_path'])}",
-                duration=int(info['audio_duration'] * 1000000),
-                audio_type="sound"
-            )
-            audio_materials.append(audio_material)
+            # 🔑 音频材料去重
+            if info['audio_path'] not in audio_path_to_material_id:
+                audio_id = generate_uuid()
+                audio_path_to_material_id[info['audio_path']] = audio_id
+                audio_path_to_info[info['audio_path']] = info
+
+                # 获取完整音频时长
+                full_audio_duration = get_audio_duration(info['audio_path'])
+
+                audio_material = AudioMaterial(
+                    material_id=audio_id,
+                    name=os.path.basename(info['audio_path']),
+                    path=f"##_draftpath_placeholder_0E685133-18CE-45ED-8CB8-2904A212EC80_##/materials/{os.path.basename(info['audio_path'])}",
+                    duration=int(full_audio_duration * 1000000),
+                    audio_type="sound"
+                )
+                audio_materials.append(audio_material)
+                logger.info(f"  🎵 创建音频材料: {os.path.basename(info['audio_path'])}")
+            else:
+                audio_id = audio_path_to_material_id[info['audio_path']]
 
             # 创建视频片段对象
-            video_speed = info['source_duration'] / max(info['audio_duration'], 0.1)  # 避免除零错误
-
-            # 使用原始源时间，不需要调整
-            adjusted_source_start = info['source_start']
-
             video_segment = VideoSegment(
                 segment_id=generate_uuid(),
                 material_id=video_id,
-                source_timerange={"duration": int(info['source_duration'] * 1000000),
-                                  "start": int(adjusted_source_start * 1000000)},
-                target_timerange={"duration": int(info['audio_duration'] * 1000000),
-                                  "start": int(info['target_start'] * 1000000)},
-                speed=video_speed,
+                source_timerange={
+                    "duration": int(info['source_duration'] * 1000000),
+                    "start": int(info['source_start'] * 1000000)
+                },
+                target_timerange={
+                    "duration": int(info['audio_duration'] * 1000000),
+                    "start": int(info['target_start'] * 1000000)
+                },
+                speed=info['video_speed'],  # 🆕 使用计算的速度
                 scale={"x": self.scale_x, "y": self.scale_y},
                 volume=0.0
             )
             video_segments.append(video_segment)
 
-            # 创建音频片段对象
-            audio_segment = AudioSegment(
-                segment_id=generate_uuid(),
-                material_id=audio_id,
-                source_timerange={"duration": int(info['audio_duration'] * 1000000), "start": 0},
-                target_timerange={"duration": int(info['audio_duration'] * 1000000),
-                                  "start": int(info['target_start'] * 1000000)},
-                speed=1.0,
-                volume=1.0
-            )
-            audio_segments.append(audio_segment)
+            # 🔑 音频片段（只在第一个视频片段时创建）
+            if info['video_seg_idx'] == 0:
+                full_audio_duration = get_audio_duration(info['audio_path'])
+                audio_segment = AudioSegment(
+                    segment_id=generate_uuid(),
+                    material_id=audio_id,
+                    source_timerange={
+                        "duration": int(full_audio_duration * 1000000),
+                        "start": 0
+                    },
+                    target_timerange={
+                        "duration": int(full_audio_duration * 1000000),
+                        "start": int(info['target_start'] * 1000000)
+                    },
+                    speed=1.0,
+                    volume=1.0
+                )
+                audio_segments.append(audio_segment)
+                logger.info(f"  🎤 创建音频片段: dialogue {info['dialogue_obj'].index}")
 
         # 生成字幕材料和片段
         subtitle_materials, subtitle_segments, subtitle_tracks = self._generate_subtitles(segments_info)
@@ -430,6 +407,10 @@ class DraftGenerator:
         # 基于音频片段的target_start来定位字幕时间（不再使用累积时间）
 
         for i, info in enumerate(segments_info[:process_count]):
+            # 只在第一个视频片段时处理字幕（按音频关系生成，避免重复）
+            if info['video_seg_idx'] != 0:
+                continue
+
             dialogue_obj = info['dialogue_obj']
 
             # 只处理有SRT文件的对话，加载SRT文件获取逐字字幕

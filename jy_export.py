@@ -34,12 +34,8 @@ class VideoExporter:
             target_dir: 导出视频的目标目录
         """
         self.export_url = export_url or os.getenv("EXPORT_VIDEO_URL", "http://localhost:51053")
-        self.target_dir = target_dir
         self.logger = logging.getLogger(__name__)
-
-        # 确保目标目录存在
-        self._ensure_target_dir()
-        self.logger.info(f"VideoExporter initialized with target directory: {self.target_dir}")
+        
 
     def _ensure_target_dir(self):
         """确保目标目录存在"""
@@ -82,7 +78,7 @@ class VideoExporter:
             self.logger.error(f"移动视频文件失败: {e}")
             return source_path
 
-    def export_video(self, draft_name: str, draft_path: Optional[str] = None, move_to_target: bool = True) -> Optional[str]:
+    def export_video(self, draft_abs_path: str , move_to_target: bool = False) -> Optional[str]:
         """
         导出剪映草稿为视频
 
@@ -99,16 +95,14 @@ class VideoExporter:
 
         # 准备请求数据
         request_data = {
-            "draft_name": draft_name
+            "draft_abs_path": draft_abs_path
         }
 
-        # 如果提供了完整路径，添加到请求数据中
-        if draft_path:
-            request_data["draft_path"] = draft_path
+       
 
         try:
+            draft_name = os.path.basename(draft_abs_path)
             self.logger.info(f"正在导出草稿: {draft_name}")
-            self.logger.info("注意：视频导出可能需要较长时间（最长30分钟），请耐心等待...")
             self.logger.debug(f"API地址: {api_endpoint}")
 
             # 发送请求
@@ -117,7 +111,7 @@ class VideoExporter:
                 json=request_data,
                 timeout=3600  # 30分钟超时
             )
-
+            #  {'status': 'success', 'output_path': 'D:\\data\\jianying_export\\BV1uf4y1P7hW_story_7_The_Inhuma.mp4'}
             # 处理响应
             if response.status_code == 200:
                 result = response.json()
