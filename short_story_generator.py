@@ -5,6 +5,7 @@ from draft_gen import DraftGenerator
 from dl_splitter_video import VideoDownloader
 from srt_generate import JSONSubtitleGenerator
 from data_models import StoryDialogue, StoryContent, VideoSegment, VideoProject
+from jy_export import VideoExporter
 import sys
 import json
 import os
@@ -122,6 +123,9 @@ class ShortStoryGenerator:
         # 初始化草稿生成器
         self.draft_generator = DraftGenerator()
 
+        # 初始化视频导出器
+        self.video_exporter = VideoExporter()
+
     def generate(self, url: str) -> Optional[VideoProject]:
         logging.info(f"🎬 开始处理视频URL: {url}")
 
@@ -217,7 +221,11 @@ class ShortStoryGenerator:
             processed_story = self.process_single_story_audio(story, story_idx, output_dir)
 
             # 生成草稿文件
-            self.generate_draft_file(processed_story, story_idx, video_segment.org_video_file_path, video_id)
+            draft_file = self.generate_draft_file(processed_story, story_idx, video_segment.org_video_file_path, video_id)
+
+            # 导出草稿为视频
+            if draft_file:
+                self.export_draft_video(draft_file)
 
             logging.info(f"✅ 故事处理完成: {story.story_title}")
 
@@ -489,6 +497,27 @@ class ShortStoryGenerator:
             logging.info(f"❌ 生成草稿文件失败: {e}")
             import traceback
             traceback.logging.info_exc()
+            return None
+
+    def export_draft_video(self, draft_file: str) -> Optional[str]:
+        """导出草稿为视频"""
+        try:
+            # 获取草稿的绝对路径
+            draft_abs_path = os.path.abspath(draft_file)
+            logging.info(f"📹 开始导出草稿: {draft_abs_path}")
+
+            # 调用导出方法
+            exported_video_path = self.video_exporter.export_video(draft_abs_path)
+
+            if exported_video_path:
+                logging.info(f"✅ 视频导出成功: {exported_video_path}")
+                return exported_video_path
+            else:
+                logging.info(f"❌ 视频导出失败")
+                return None
+
+        except Exception as e:
+            logging.info(f"❌ 导出视频异常: {e}")
             return None
 
     def save_stories_to_cache(self, stories: List[StoryContent], srt_file: str) -> str:
