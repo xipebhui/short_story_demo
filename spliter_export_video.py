@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 TARGET_MIN_DURATION = 36
 TARGET_MAX_DURATION = 60
 
+# 视频加速倍数（与 draft_gen.py 中的 MAX_SPEED_FACTOR 保持一致）
+VIDEO_SPEED_FACTOR = 1.5
+
 
 class VideoSplitter:
     """视频切割器"""
@@ -61,26 +64,32 @@ class VideoSplitter:
             logger.error(f"❌ 获取视频时长失败: {e}")
             return None
 
-    def parse_time_to_seconds(self, time_str: str) -> float:
-        """将时间字符串 '00:00:05,919' 转换为秒"""
+    def parse_time_to_seconds(self, time_str: str, apply_speed: bool = True) -> float:
+        """将时间字符串 '00:00:05,919' 转换为秒，并应用视频加速"""
         try:
             # 分离时、分、秒和毫秒
             time_part, ms_part = time_str.split(',')
             h, m, s = map(int, time_part.split(':'))
             ms = int(ms_part)
             total_seconds = h * 3600 + m * 60 + s + ms / 1000.0
+
+            # 应用视频加速：导出视频已加速，时间需要除以加速倍数
+            if apply_speed:
+                total_seconds = total_seconds / VIDEO_SPEED_FACTOR
+
             return total_seconds
         except Exception as e:
             logger.error(f"❌ 解析时间失败 '{time_str}': {e}")
             return 0.0
 
     def calculate_split_points(self, story: Dict) -> List[Dict]:
-        """根据 dialogue 计算切割点"""
+        """根据 dialogue 计算切割点（考虑视频加速）"""
         split_points = []
         current_start = 0.0
         current_dialogues = []
 
         dialogues = story.get('dialogue', [])
+        logger.info(f"  ⚡ 视频加速倍数: {VIDEO_SPEED_FACTOR}x")
 
         for i, dialogue in enumerate(dialogues):
             # 获取最后一个 video_segment 的结束时间
@@ -90,7 +99,11 @@ class VideoSplitter:
 
             last_segment = video_segments[-1]
             end_time_str = last_segment.get('end', '00:00:00,000')
-            end_seconds = self.parse_time_to_seconds(end_time_str)
+            # 应用视频加速：原始时间 / 加速倍数
+            end_seconds = self.parse_time_to_seconds(end_time_str, apply_speed=True)
+
+            if i == 0:
+                logger.info(f"  📝 示例转换: {end_time_str} → {end_seconds:.2f}s (加速后)")
 
             current_dialogues.append(i)
             duration = end_seconds - current_start
@@ -117,7 +130,7 @@ class VideoSplitter:
                         prev_dialogue = dialogues[current_dialogues[-2]]
                         prev_segments = prev_dialogue.get('video_segments', [])
                         prev_end_str = prev_segments[-1].get('end', '00:00:00,000')
-                        prev_end_seconds = self.parse_time_to_seconds(prev_end_str)
+                        prev_end_seconds = self.parse_time_to_seconds(prev_end_str, apply_speed=True)
 
                         split_points.append({
                             'start_time': current_start,
@@ -137,7 +150,7 @@ class VideoSplitter:
             last_segments = last_dialogue.get('video_segments', [])
             if last_segments:
                 last_end_str = last_segments[-1].get('end', '00:00:00,000')
-                last_end_seconds = self.parse_time_to_seconds(last_end_str)
+                last_end_seconds = self.parse_time_to_seconds(last_end_str, apply_speed=True)
                 final_duration = last_end_seconds - current_start
 
                 # 只有在时长符合要求时才保存
