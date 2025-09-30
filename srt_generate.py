@@ -46,7 +46,7 @@ class JSONSubtitleGenerator:
             return json_output, story_num
 
         # 加载模型 medium small
-        model = whisper.load_model("small")
+        model = whisper.load_model("small",device="cuda")
         self.logger.info("Whisper 模型已加载")
 
         self.logger.info("正在转录音频，请稍候...")
