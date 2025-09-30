@@ -504,10 +504,11 @@ class ShortStoryGenerator:
         try:
             # 获取草稿的绝对路径
             draft_abs_path = os.path.abspath(draft_file)
-            logging.info(f"📹 开始导出草稿: {draft_abs_path}")
+            draft_floder = os.path.dirname(draft_abs_path)
+            logging.info(f"📹 开始导出草稿: {draft_floder}")
 
             # 调用导出方法
-            exported_video_path = self.video_exporter.export_video(draft_abs_path)
+            exported_video_path = self.video_exporter.export_video(draft_floder)
 
             if exported_video_path:
                 logging.info(f"✅ 视频导出成功: {exported_video_path}")
