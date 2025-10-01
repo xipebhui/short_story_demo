@@ -73,7 +73,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 class ShortStoryGenerator:
-    def __init__(self, max_duration_minutes: int = 10, output_dir: str = "./output/org_materials"):
+    def __init__(self, max_duration_minutes: int = 4, output_dir: str = "./output/org_materials"):
         self.client = GeminiClient()
         self.tts_client = TTSClient()
         self.max_duration_minutes = max_duration_minutes
@@ -525,7 +525,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     video_url = sys.argv[1]
-    max_duration_minutes = int(sys.argv[2]) if len(sys.argv) > 2 else 10
+    max_duration_minutes = int(sys.argv[2]) if len(sys.argv) > 2 else 4
     output_dir = sys.argv[3] if len(sys.argv) > 3 else "./output/org_materials"
 
     generator = ShortStoryGenerator(
