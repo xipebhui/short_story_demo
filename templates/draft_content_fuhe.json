@@ -64,84 +64,82 @@
     "ai_translates": [],
     "audio_balances": [],
     "audio_effects": [
-      [
-        {
-          "audio_adjust_params": [
-            {
-              "default_value": 0.5,
-              "max_value": 1.0,
-              "min_value": 0.0,
-              "name": "change_voice_param_center_position",
-              "parameterIndex": 0,
-              "portIndex": 0,
-              "value": 1.0
-            },
-            {
-              "default_value": 0.5,
-              "max_value": 1.0,
-              "min_value": 0.0,
-              "name": "change_voice_param_surrounding_frequency",
-              "parameterIndex": 1,
-              "portIndex": 0,
-              "value": 0.0
-            }
-          ],
-          "category_id": "sound_effect",
-          "category_name": "场景音",
-          "constant_material_id": "6221D90B-2CEF-4735-AECC-7D5BC300D87D",
-          "id": "AE99E62B-E904-49d4-9B78-2EF4C6D36EAD",
-          "is_ugc": false,
-          "name": "环绕音",
-          "path": "C:/Users/Administrator/AppData/Local/JianyingPro/User Data/Cache/effect/5723960/fa9a4cb20d3488bf79e176571d5841f5",
-          "production_path": "",
-          "resource_id": "7161319847819743780",
-          "speaker_id": "",
-          "sub_type": 1,
-          "time_range": {
-            "duration": 0,
-            "start": 0
+      {
+        "audio_adjust_params": [
+          {
+            "default_value": 0.5,
+            "max_value": 1.0,
+            "min_value": 0.0,
+            "name": "change_voice_param_center_position",
+            "parameterIndex": 0,
+            "portIndex": 0,
+            "value": 1.0
           },
-          "type": "audio_effect"
+          {
+            "default_value": 0.5,
+            "max_value": 1.0,
+            "min_value": 0.0,
+            "name": "change_voice_param_surrounding_frequency",
+            "parameterIndex": 1,
+            "portIndex": 0,
+            "value": 0.0
+          }
+        ],
+        "category_id": "sound_effect",
+        "category_name": "场景音",
+        "constant_material_id": "6221D90B-2CEF-4735-AECC-7D5BC300D87D",
+        "id": "AE99E62B-E904-49d4-9B78-2EF4C6D36EAD",
+        "is_ugc": false,
+        "name": "环绕音",
+        "path": "C:/Users/Administrator/AppData/Local/JianyingPro/User Data/Cache/effect/5723960/fa9a4cb20d3488bf79e176571d5841f5",
+        "production_path": "",
+        "resource_id": "7161319847819743780",
+        "speaker_id": "",
+        "sub_type": 1,
+        "time_range": {
+          "duration": 0,
+          "start": 0
         },
-        {
-          "audio_adjust_params": [
-            {
-              "default_value": 0.5,
-              "max_value": 1.0,
-              "min_value": 0.0,
-              "name": "change_voice_param_center_position",
-              "parameterIndex": 0,
-              "portIndex": 0,
-              "value": 0.0
-            },
-            {
-              "default_value": 0.5,
-              "max_value": 1.0,
-              "min_value": 0.0,
-              "name": "change_voice_param_surrounding_frequency",
-              "parameterIndex": 1,
-              "portIndex": 0,
-              "value": 1.0
-            }
-          ],
-          "category_id": "sound_effect",
-          "category_name": "场景音",
-          "constant_material_id": "2FF768DA-26E2-4d8e-94A2-F2499F0C86E1",
-          "id": "A10056CF-D317-455c-97DC-2ADAD03B3CFF",
-          "is_ugc": false,
-          "name": "环绕音",
-          "path": "C:/Users/Administrator/AppData/Local/JianyingPro/User Data/Cache/effect/5723960/fa9a4cb20d3488bf79e176571d5841f5",
-          "production_path": "",
-          "resource_id": "7161319847819743780",
-          "speaker_id": "",
-          "sub_type": 1,
-          "time_range": {
-            "duration": 0,
-            "start": 0
+        "type": "audio_effect"
+      },
+      {
+        "audio_adjust_params": [
+          {
+            "default_value": 0.5,
+            "max_value": 1.0,
+            "min_value": 0.0,
+            "name": "change_voice_param_center_position",
+            "parameterIndex": 0,
+            "portIndex": 0,
+            "value": 0.0
           },
-          "type": "audio_effect"
-        }
-      ]
+          {
+            "default_value": 0.5,
+            "max_value": 1.0,
+            "min_value": 0.0,
+            "name": "change_voice_param_surrounding_frequency",
+            "parameterIndex": 1,
+            "portIndex": 0,
+            "value": 1.0
+          }
+        ],
+        "category_id": "sound_effect",
+        "category_name": "场景音",
+        "constant_material_id": "2FF768DA-26E2-4d8e-94A2-F2499F0C86E1",
+        "id": "A10056CF-D317-455c-97DC-2ADAD03B3CFF",
+        "is_ugc": false,
+        "name": "环绕音",
+        "path": "C:/Users/Administrator/AppData/Local/JianyingPro/User Data/Cache/effect/5723960/fa9a4cb20d3488bf79e176571d5841f5",
+        "production_path": "",
+        "resource_id": "7161319847819743780",
+        "speaker_id": "",
+        "sub_type": 1,
+        "time_range": {
+          "duration": 0,
+          "start": 0
+        },
+        "type": "audio_effect"
+      }
     ],
     "audio_fades": [
       {

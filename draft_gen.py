@@ -7,7 +7,7 @@
 
 # ================== 配置开关 ==================
 # 字幕调试模式 - 开启时只生成前10个字幕，用于测试
-SUBTITLE_DEBUG_MODE = False
+SUBTITLE_DEBUG_MODE = True
 
 # 中文字幕开关 - 默认关闭中文字幕
 ENABLE_CHINESE_SUBTITLES = False
@@ -16,7 +16,7 @@ ENABLE_CHINESE_SUBTITLES = False
 ENABLE_ENGLISH_SUBTITLES = True
 
 # 调试模式下的字幕数量限制
-DEBUG_SUBTITLE_LIMIT = 10
+DEBUG_SUBTITLE_LIMIT = 1
 
 # ================== 速度控制配置 ==================
 # 目标视频时长（秒）- 控制最终视频在1分钟内
@@ -816,6 +816,10 @@ class DraftGenerator:
             # 更新clip中的scale
             if 'clip' in new_video_seg:
                 new_video_seg['clip']['scale'] = video_seg.clip['scale']
+            # 🆕 保留模板中的 extra_material_refs (音效引用)
+            # 如果模板有 extra_material_refs,则保留它
+            if video_seg_template and 'extra_material_refs' in video_seg_template:
+                new_video_seg['extra_material_refs'] = video_seg_template['extra_material_refs']
             video_track['segments'].append(new_video_seg)
 
         # 复制并修改音频片段
@@ -829,6 +833,10 @@ class DraftGenerator:
                 "speed": audio_seg.speed,
                 "volume": audio_seg.volume
             })
+            # 🆕 保留模板中的 extra_material_refs (音效引用)
+            # 如果模板有 extra_material_refs,则保留它
+            if audio_seg_template and 'extra_material_refs' in audio_seg_template:
+                new_audio_seg['extra_material_refs'] = audio_seg_template['extra_material_refs']
             audio_track['segments'].append(new_audio_seg)
 
         # 处理字幕轨道
