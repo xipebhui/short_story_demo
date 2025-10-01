@@ -9,8 +9,10 @@ from jy_export import VideoExporter
 import sys
 import json
 import os
+import shutil
 from datetime import datetime
 from typing import List, Dict, Optional
+from pathlib import Path
 import logging
 
 
@@ -145,6 +147,9 @@ class ShortStoryGenerator:
             # 保存最终项目结果
             cache_file = self.save_project_to_cache(video_project)
 
+            # 整理导出的视频文件
+            self.organize_exported_videos(video_project)
+
             logging.info(f"✅ 视频处理完成！共处理 {len(video_project.segments)} 个视频段")
             return video_project
 
@@ -203,6 +208,75 @@ class ShortStoryGenerator:
 
         except Exception as e:
             logging.info(f"❌ 故事处理失败: {e}")
+
+    def organize_exported_videos(self, video_project: VideoProject) -> Dict[str, List[str]]:
+        """整理导出的视频：按视频ID分组到文件夹中"""
+        try:
+            logging.info(f"\n📁 开始整理导出的视频文件...")
+
+            # 收集所有导出的视频路径
+            exported_videos = []
+            for segment in video_project.segments:
+                for story in segment.stories:
+                    if story.exported_video_path and os.path.exists(story.exported_video_path):
+                        exported_videos.append(story.exported_video_path)
+
+            if not exported_videos:
+                logging.info("⚠️ 没有找到导出的视频文件")
+                return {}
+
+            logging.info(f"找到 {len(exported_videos)} 个导出的视频文件")
+
+            organized = {}
+
+            for video_path in exported_videos:
+                # 获取文件名（不含扩展名）
+                base_name = os.path.basename(video_path)
+                name_without_ext = os.path.splitext(base_name)[0]
+
+                # 解析文件名: BV1F2TezvEze_story_3_Nelson's_Controversial_Debut...
+                parts = name_without_ext.split('_', 1)  # 只在第一个下划线处分割
+                if len(parts) < 2:
+                    logging.warning(f"⚠️ 文件名格式不符合规则，跳过: {base_name}")
+                    continue
+
+                # 提取 video_id（第一个下划线之前的部分）
+                video_id = parts[0]
+                # 剩余部分作为新文件名
+                new_name = parts[1] + os.path.splitext(base_name)[1]
+
+                # 创建目标文件夹（在导出视频的同级目录）
+                video_dir = os.path.join(os.path.dirname(video_path), video_id)
+                os.makedirs(video_dir, exist_ok=True)
+
+                # 目标文件路径
+                target_path = os.path.join(video_dir, new_name)
+
+                # 移动文件
+                try:
+                    shutil.move(video_path, target_path)
+                    logging.info(f"  ✓ {base_name} → {video_id}/{new_name}")
+
+                    # 记录到字典
+                    if video_id not in organized:
+                        organized[video_id] = []
+                    organized[video_id].append(target_path)
+
+                except Exception as e:
+                    logging.error(f"  ❌ 移动文件失败 {base_name}: {e}")
+
+            # 输出整理结果
+            logging.info(f"\n✅ 视频整理完成！")
+            for video_id, files in organized.items():
+                logging.info(f"  📁 {video_id}/: {len(files)} 个文件")
+
+            return organized
+
+        except Exception as e:
+            logging.error(f"❌ 整理视频文件失败: {e}")
+            import traceback
+            traceback.print_exc()
+            return {}
 
     def save_project_to_cache(self, video_project: VideoProject) -> str:
         """保存视频项目到缓存文件"""
