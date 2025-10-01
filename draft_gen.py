@@ -7,7 +7,7 @@
 
 # ================== 配置开关 ==================
 # 字幕调试模式 - 开启时只生成前10个字幕，用于测试
-SUBTITLE_DEBUG_MODE = True
+SUBTITLE_DEBUG_MODE = False
 
 # 中文字幕开关 - 默认关闭中文字幕
 ENABLE_CHINESE_SUBTITLES = False
@@ -855,11 +855,14 @@ class DraftGenerator:
         # 5. 处理背景音频 - 使用深度拷贝
         if self.background_audio_path:
             # 创建背景音频对象
+            bg_audio_duration_seconds = get_audio_duration(self.background_audio_path)
+            bg_audio_duration_microseconds = int(bg_audio_duration_seconds * 1000000)
+
             bg_audio = AudioMaterial(
                 material_id=generate_uuid(),
                 name=os.path.basename(self.background_audio_path),
                 path=f"##_draftpath_placeholder_0E685133-18CE-45ED-8CB8-2904A212EC80_##/materials/{os.path.basename(self.background_audio_path)}",
-                duration=int(get_audio_duration(self.background_audio_path) * 1000000),
+                duration=bg_audio_duration_microseconds,
                 audio_type="sound"
             )
 
@@ -876,18 +879,44 @@ class DraftGenerator:
                 })
                 draft['materials']['audios'].append(new_bg_audio_material)
 
-            # 获取模板音频片段并深度拷贝
+            # 🆕 计算需要多少个背景音频片段来覆盖整个视频时长
+            # 如果视频时长超过音频长度，需要循环播放音频
+            bg_segments = []
             main_audio_seg_template = draft['tracks'][2]['segments'][0] if draft['tracks'][2]['segments'] else None
+
             if main_audio_seg_template:
-                new_bg_audio_segment = copy.deepcopy(main_audio_seg_template)
-                new_bg_audio_segment.update({
-                    "id": generate_uuid(),
-                    "material_id": bg_audio.id,
-                    "source_timerange": {"duration": main_duration, "start": 0},
-                    "target_timerange": {"duration": main_duration, "start": 0},
-                    "speed": 1.0
-                })
-                draft['tracks'][2]['segments'] = [new_bg_audio_segment]
+                current_position = 0  # 当前时间位置（微秒）
+                segment_index = 0
+
+                while current_position < main_duration:
+                    # 计算这个 segment 应该播放多长时间
+                    remaining_duration = main_duration - current_position
+                    segment_duration = min(bg_audio_duration_microseconds, remaining_duration)
+
+                    # 创建背景音频 segment
+                    new_bg_audio_segment = copy.deepcopy(main_audio_seg_template)
+                    new_bg_audio_segment.update({
+                        "id": generate_uuid(),
+                        "material_id": bg_audio.id,
+                        "source_timerange": {
+                            "duration": segment_duration,
+                            "start": 0  # 每次都从音频开头播放
+                        },
+                        "target_timerange": {
+                            "duration": segment_duration,
+                            "start": current_position
+                        },
+                        "speed": 1.0
+                    })
+                    bg_segments.append(new_bg_audio_segment)
+
+                    current_position += segment_duration
+                    segment_index += 1
+
+                    logging.info(f"  🎵 背景音乐片段 {segment_index}: {current_position/1000000:.2f}s / {main_duration/1000000:.2f}s")
+
+                draft['tracks'][2]['segments'] = bg_segments
+                logging.info(f"✅ 创建了 {len(bg_segments)} 个背景音乐片段以覆盖 {main_duration/1000000:.2f}s 的视频")
             else:
                 # 如果没有模板，清空音频轨道
                 draft['tracks'][2]['segments'] = []
