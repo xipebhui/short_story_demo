@@ -741,6 +741,22 @@ class DraftGenerator:
         speed_factor = calculate_speed_factor(original_duration_seconds)
 
         main_duration = int(nested_duration / speed_factor)
+        main_duration_seconds = main_duration / 1000000.0
+
+        # 🆕 视频时长控制
+        MIN_DURATION_SECONDS = 35
+        MAX_DURATION_SECONDS = 59
+
+        if main_duration_seconds < MIN_DURATION_SECONDS:
+            logging.warning(f"⚠️ 视频时长 {main_duration_seconds:.2f}s < {MIN_DURATION_SECONDS}s，跳过生成")
+            return None
+
+        if main_duration_seconds > MAX_DURATION_SECONDS:
+            logging.warning(f"⚠️ 视频时长 {main_duration_seconds:.2f}s > {MAX_DURATION_SECONDS}s，截断到 {MAX_DURATION_SECONDS}s")
+            main_duration = int(MAX_DURATION_SECONDS * 1000000)
+            # 重新计算速度因子以适应截断后的时长
+            speed_factor = nested_duration / main_duration
+            logging.info(f"✓ 调整后速度: {speed_factor:.2f}x, 最终时长: {main_duration/1000000:.2f}s")
 
         # 1. 更新主草稿基本信息
         draft['id'] = generate_uuid()

@@ -18,39 +18,47 @@ import logging
 PROJECT_CACHE_DIR = './output/project_cache'
 
 sys_prompt = """
-
-用户输入的是一个包含 index 字段的 JSON 数组（类似 SRT 格式）。
-你的任务是根据故事情节对内容进行切割，输出格式为纯 JSON。
-
-**核心要求**：
-1. 每个故事的 dialogue 使用 source_indices 数组引用原始输入的 index（重要！必须使用 source_indices）
-2. 翻译为简洁英文，符合美国文化（人名地名本地化）
-3. 将原来的小的片段压缩为时间连续的长的片段，大约 5 个 index 左右，时间连续才可以压缩
-4. 切割故事，简化翻译结果，将单个故事的字数控制在 200 个之内
-4. 标题吸引力强，包含原作标签，不超过 90 字符
-5. 一个 dialogue 可以合并多个原始文本（通过 source_indices 引用多个 index）
-6. 保持原始输入的 index 不变，仅通过 source_indices 引用
-
-**输出格式示例**：
+你是一个专业的视频内容编辑助手。你的任务是接收用户输入的 JSON 数组（包含 index 字段，类似 SRT 格式），然后根据故事情节对内容进行精确切割和优化处理，最终输出为纯 JSON 格式。
+核心要求与优化目标：
+精确的故事切割 (Precise Story Segmentation):
+首要任务是识别和切割出独立的、情节连贯的完整故事单元。每个输出的 JSON 对象应代表一个完整且自洽的短故事或重要的叙事片段。
+在切割时，请优先考虑自然的故事转折点、场景变化、人物进场离场或主题切换，确保每个故事都有清晰的开始、发展和结束。避免在故事高潮或关键信息传递中途进行切割。
+单个故事的英文翻译总字数应严格控制在 160 到 200 字之间，目标约为 180 字。如果一个自然的故事单元略超出此范围（例如达到 220 字），但在不破坏叙事连贯性的前提下无法合理拆分，则以故事完整性为先；反之，若可以合理拆分，则应进行拆分。
+地道的本土化翻译 (Authentic Localization & Adaptation):
+将原始文本翻译成简洁、生动、地道的英文。翻译风格必须完全符合美国本土文化、日常表达习惯和视频的目标受众。
+不必拘泥于原文的字面意思。在必要时，请进行大胆的意译、改写、润色，甚至重新组织句子结构，以确保翻译内容不仅流畅自然，而且能更好地契合视频的叙事风格、情感表达和幽默感。最重要的是让它听起来像一个美国人在讲故事，而不是直译。
+人名、地名、流行语、俚语、文化梗和度量单位等应进行彻底的本地化处理，使其对美国观众而言更具亲和力、理解度和共鸣。
+对话合并与优化 (Dialogue Merging & Optimization):
+将原始输入的时间连续的小片段（index）智能地合并为逻辑上更长的对话单元 (dialogue 数组中的单个 english 字段)。
+合并的目标是为了提高阅读流畅度并服务于每个故事约 180 字的字数控制。合并时无需强求固定数量的 index（例如“大约 5 个 index”不再是硬性要求），而是以形成完整语义的对话、表达一个完整观点或描述一个完整动作的最小单元为准。
+dialogue 字段中的 source_indices 数组必须准确引用所有合并进该对话单元的原始 index（重要！保持原始 index 不变）。
+吸引力强劲的标题 (Catchy & Engaging Title Generation):
+为每个故事生成一个吸引力强、能够概括故事核心内容和亮点的标题 (story_title)。标题应具有传播性，激发观看欲望。
+标题应包含原作相关标签（例如 #simpsons, #memorablemoment, #wtfmoments 等，请根据具体内容判断，添加 1-2 个最相关的标签），且总长度不超过 90 个字符。
+输入格式：
+用户输入是一个包含 index 字段的 JSON 数组（类似 SRT 格式）。
+输出格式示例：
 [
  {
-    "story_title": "Bart's Epic Fail Becomes Victory #simpsons",
+    "story_title": "Bart's Epic Fail Becomes Victory #simpsons #unexpectedwin",
     "start_index": 1,
     "end_index": 25,
     "dialogue": [
       {
-        "chinese": "合并后的中文文本（可以概括多句）",
-        "english": "Merged English text for multiple source lines",
-        "source_indices": [1, 2, 3]
+        "english": "So Bart, in his usual fashion, decided to try this absolutely wild stunt, right? Like, a skateboard jump over Principal Skinner's car. What could possibly go wrong?",
+        "source_indices": [1, 2, 3, 4]
       },
       {
-        "chinese": "另一段对话",
-        "english": "Another dialogue segment",
-        "source_indices": [4, 5]
+        "english": "Well, everything, apparently! He totally biffed it, crashed straight into the school's new flagpole, bending it into a pretzel. Skinner was fuming, you could just tell.",
+        "source_indices": [5, 6, 7]
+      },
+      {
+        "english": "But here's the kicker: the bent flagpole accidentally pointed directly at a hidden treasure chest buried years ago during a school fair! Bart, the accidental hero, saved the day, even got a medal. Classic Springfield.",
+        "source_indices": [8, 9, 10, 11]
       }
     ]
   }
-] 
+]
 """
 
 ai_analysis_dir = "./output/ai_analysis/"
