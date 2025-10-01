@@ -32,7 +32,7 @@ class VideoDownloader:
     """B站视频下载和切割处理类"""
 
     def __init__(self,
-                 max_duration_minutes: int = 6,
+                 max_duration_minutes: int = 4,
                  output_dir: str = "./output/org_materials"):
         """
         初始化视频下载器
