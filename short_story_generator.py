@@ -594,25 +594,108 @@ class ShortStoryGenerator:
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
-        logging.info("Usage: python short_story_generator.py <video_url> [max_duration_minutes] [output_dir]")
-        logging.info("Example: python short_story_generator.py 'https://www.bilibili.com/video/BV1abc123def' 10 './output/org_materials'")
+        logging.info("使用方法:")
+        logging.info("  1. 单个视频URL:")
+        logging.info("     python short_story_generator.py <video_url> [max_duration_minutes] [output_dir]")
+        logging.info("     示例: python short_story_generator.py 'https://www.bilibili.com/video/BV1abc123def' 4 './output/org_materials'")
+        logging.info("")
+        logging.info("  2. URL列表文件:")
+        logging.info("     python short_story_generator.py --file <url_list_file> [max_duration_minutes] [output_dir]")
+        logging.info("     示例: python short_story_generator.py --file urls.txt 4 './output/org_materials'")
+        logging.info("")
+        logging.info("URL列表文件格式 (每行一个URL):")
+        logging.info("  https://www.bilibili.com/video/BV1abc123def")
+        logging.info("  https://www.bilibili.com/video/BV1xyz456ghi")
         sys.exit(1)
 
-    video_url = sys.argv[1]
-    max_duration_minutes = int(sys.argv[2]) if len(sys.argv) > 2 else 4
-    output_dir = sys.argv[3] if len(sys.argv) > 3 else "./output/org_materials"
+    # 检查是否使用文件模式
+    if sys.argv[1] == "--file":
+        if len(sys.argv) < 3:
+            logging.error("❌ 错误: --file 参数需要指定文件路径")
+            sys.exit(1)
 
-    generator = ShortStoryGenerator(
-        max_duration_minutes=max_duration_minutes,
-        output_dir=output_dir
-    )
-    result = generator.generate(video_url)
+        url_file = sys.argv[2]
+        max_duration_minutes = int(sys.argv[3]) if len(sys.argv) > 3 else 4
+        output_dir = sys.argv[4] if len(sys.argv) > 4 else "./output/org_materials"
 
-    if result:
-        logging.info(f"\n🎉 处理完成！项目包含 {len(result.segments)} 个视频段")
-        for i, segment in enumerate(result.segments, 1):
-            logging.info(f"段 {i}: {len(segment.stories)} 个故事，SRT文件: {segment.srt_file_path}")
+        # 读取URL列表
+        if not os.path.exists(url_file):
+            logging.error(f"❌ URL列表文件不存在: {url_file}")
+            sys.exit(1)
+
+        with open(url_file, 'r', encoding='utf-8') as f:
+            urls = [line.strip() for line in f if line.strip() and not line.startswith('#')]
+
+        if not urls:
+            logging.error(f"❌ URL列表文件为空: {url_file}")
+            sys.exit(1)
+
+        logging.info(f"📋 从文件加载了 {len(urls)} 个URL")
+        logging.info(f"⚙️ 配置: max_duration={max_duration_minutes}分钟, output_dir={output_dir}")
+
+        # 创建生成器
+        generator = ShortStoryGenerator(
+            max_duration_minutes=max_duration_minutes,
+            output_dir=output_dir
+        )
+
+        # 批量处理
+        success_count = 0
+        failed_urls = []
+
+        for idx, video_url in enumerate(urls, 1):
+            logging.info(f"\n{'='*80}")
+            logging.info(f"🎬 处理视频 {idx}/{len(urls)}: {video_url}")
+            logging.info(f"{'='*80}")
+
+            try:
+                result = generator.generate(video_url)
+
+                if result:
+                    logging.info(f"✅ 视频 {idx}/{len(urls)} 处理完成！项目包含 {len(result.segments)} 个视频段")
+                    for i, segment in enumerate(result.segments, 1):
+                        logging.info(f"  段 {i}: {len(segment.stories)} 个故事")
+                    success_count += 1
+                else:
+                    logging.error(f"❌ 视频 {idx}/{len(urls)} 处理失败: {video_url}")
+                    failed_urls.append(video_url)
+
+            except Exception as e:
+                logging.error(f"❌ 视频 {idx}/{len(urls)} 处理异常: {video_url}")
+                logging.error(f"   错误: {e}")
+                import traceback
+                traceback.print_exc()
+                failed_urls.append(video_url)
+
+        # 输出总结
+        logging.info(f"\n{'='*80}")
+        logging.info(f"📊 批量处理完成！")
+        logging.info(f"{'='*80}")
+        logging.info(f"  ✅ 成功: {success_count}/{len(urls)}")
+        logging.info(f"  ❌ 失败: {len(failed_urls)}/{len(urls)}")
+
+        if failed_urls:
+            logging.info(f"\n失败的URL列表:")
+            for url in failed_urls:
+                logging.info(f"  - {url}")
+
     else:
-        logging.info("❌ 处理失败")
-        sys.exit(1)
+        # 单个URL模式
+        video_url = sys.argv[1]
+        max_duration_minutes = int(sys.argv[2]) if len(sys.argv) > 2 else 4
+        output_dir = sys.argv[3] if len(sys.argv) > 3 else "./output/org_materials"
+
+        generator = ShortStoryGenerator(
+            max_duration_minutes=max_duration_minutes,
+            output_dir=output_dir
+        )
+        result = generator.generate(video_url)
+
+        if result:
+            logging.info(f"\n🎉 处理完成！项目包含 {len(result.segments)} 个视频段")
+            for i, segment in enumerate(result.segments, 1):
+                logging.info(f"段 {i}: {len(segment.stories)} 个故事，SRT文件: {segment.srt_file_path}")
+        else:
+            logging.info("❌ 处理失败")
+            sys.exit(1)
 
