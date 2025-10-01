@@ -60,26 +60,57 @@ class VideoRotator:
         except Exception as e:
             logger.error(f"❌ 保存状态文件失败: {e}")
 
-    def build_mapping(self, video_dir: str, target_start: int, target_end: int,
+    def build_mapping(self, video_dir: str, target_start: str, target_end: str,
                      base_dir: str = BASE_DIR) -> Dict:
         """
         构建视频到目录的映射关系
 
         Args:
             video_dir: 视频文件所在目录
-            target_start: 目标目录起始编号
-            target_end: 目标目录结束编号
+            target_start: 目标目录起始名称 (例如: "老号1-1")
+            target_end: 目标目录结束名称 (例如: "老号1-50")
             base_dir: 目标目录的基础路径
 
         Returns:
             Dict: 映射关系
         """
-        # 环形名称 = 视频目录的 basename
-        ring_name = os.path.basename(video_dir.rstrip(os.sep))
+        # 解析 target_start 和 target_end
+        # 例如: "老号1-1" -> prefix="老号1-", start_num=1
+        if '-' not in target_start or '-' not in target_end:
+            logger.error(f"❌ 目标目录格式错误，应为 '前缀-数字' 格式 (例如: 老号1-1)")
+            return {}
+
+        # 分割最后一个 '-' 来获取前缀和数字
+        start_parts = target_start.rsplit('-', 1)
+        end_parts = target_end.rsplit('-', 1)
+
+        start_prefix = start_parts[0] + '-'
+        end_prefix = end_parts[0] + '-'
+
+        # 验证前缀一致
+        if start_prefix != end_prefix:
+            logger.error(f"❌ 起始和结束目录的前缀不一致: '{start_prefix}' != '{end_prefix}'")
+            return {}
+
+        prefix = start_prefix
+        try:
+            start_num = int(start_parts[1])
+            end_num = int(end_parts[1])
+        except ValueError:
+            logger.error(f"❌ 无法解析目录编号: {target_start}, {target_end}")
+            return {}
+
+        if start_num > end_num:
+            logger.error(f"❌ 起始编号 {start_num} 大于结束编号 {end_num}")
+            return {}
+
+        # 环形名称使用前缀 (去掉最后的 '-')
+        ring_name = prefix.rstrip('-')
 
         logger.info(f"\n🔧 开始构建环形系统: {ring_name}")
         logger.info(f"视频目录: {video_dir}")
-        logger.info(f"目标范围: {target_start} - {target_end}")
+        logger.info(f"目标前缀: {prefix}")
+        logger.info(f"目标范围: {start_num} - {end_num}")
 
         # 获取所有视频文件
         video_files = []
@@ -100,15 +131,22 @@ class VideoRotator:
 
         # 生成目标目录列表: 老号1-1, 老号1-2, ..., 老号1-50
         target_dirs = []
-        for i in range(target_start, target_end + 1):
-            # 从视频目录名中提取号码前缀 (例如 "老号1" 从 "老号1视频目录")
-            # 简化处理: 直接使用 ring_name 作为前缀
-            dir_name = f"{ring_name}-{i}"
+        for i in range(start_num, end_num + 1):
+            dir_name = f"{prefix}{i}"
             dir_path = os.path.join(base_dir, dir_name)
             target_dirs.append(dir_path)
 
-        logger.info(f"生成 {len(target_dirs)} 个目标目录")
+        logger.info(f"生成 {len(target_dirs)} 个目标目录路径")
         logger.info(f"  示例: {os.path.basename(target_dirs[0])} ~ {os.path.basename(target_dirs[-1])}")
+
+        # 验证目标目录是否存在
+        missing_dirs = [d for d in target_dirs if not os.path.exists(d)]
+        if missing_dirs:
+            logger.warning(f"⚠️ 警告: {len(missing_dirs)} 个目标目录不存在，将在旋转时创建")
+            for d in missing_dirs[:3]:  # 只显示前3个
+                logger.warning(f"  - {d}")
+            if len(missing_dirs) > 3:
+                logger.warning(f"  ... 还有 {len(missing_dirs) - 3} 个")
 
         num_videos = len(video_files)
         num_dirs = len(target_dirs)
@@ -128,6 +166,9 @@ class VideoRotator:
             "video_dir": video_dir,
             "videos": video_files,
             "base_dir": base_dir,
+            "target_prefix": prefix,
+            "target_start_num": start_num,
+            "target_end_num": end_num,
             "target_start": target_start,
             "target_end": target_end,
             "target_dirs": target_dirs,
@@ -331,15 +372,15 @@ def main():
 使用示例:
 
   1. 构建环形系统 (老号1, 50个目录):
-     python video_rotator.py build --video_dir D:\\videos\\老号1 --target-start 1 --target-end 50
+     python video_rotator.py build --video_dir D:\\videos\\老号1 --target-start 老号1-1 --target-end 老号1-50
 
-     说明: 会创建 D:\\qiyuan\\素材\\老号1-1, 老号1-2, ..., 老号1-50 共50个目录
-           环形系统名称为 "老号1" (取自视频目录的basename)
+     说明: 将视频复制到已存在的 D:\\qiyuan\\素材\\老号1-1, 老号1-2, ..., 老号1-50 目录中
+           环形系统名称为 "老号1" (从 --target-start 的前缀提取)
 
   2. 构建多个环形系统:
-     python video_rotator.py build --video_dir D:\\videos\\老号1 --target-start 1 --target-end 50
-     python video_rotator.py build --video_dir D:\\videos\\老号2 --target-start 1 --target-end 50
-     python video_rotator.py build --video_dir D:\\videos\\新号1 --target-start 1 --target-end 30
+     python video_rotator.py build --video_dir D:\\videos\\老号1 --target-start 老号1-1 --target-end 老号1-50
+     python video_rotator.py build --video_dir D:\\videos\\老号2 --target-start 老号2-1 --target-end 老号2-50
+     python video_rotator.py build --video_dir D:\\videos\\新号1 --target-start 新号1-1 --target-end 新号1-30
 
   3. 列出所有环形系统:
      python video_rotator.py list
@@ -380,20 +421,21 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
-  python video_rotator.py build --video_dir D:\\videos\\老号1 --target-start 1 --target-end 50
+  python video_rotator.py build --video_dir D:\\videos\\老号1 --target-start 老号1-1 --target-end 老号1-50
 
   会创建环形系统 "老号1":
   - 扫描 D:\\videos\\老号1 下的所有视频文件
-  - 生成目标目录: D:\\qiyuan\\素材\\老号1-1, 老号1-2, ..., 老号1-50
+  - 映射到已存在的目录: D:\\qiyuan\\素材\\老号1-1, 老号1-2, ..., 老号1-50
   - 计算窗口大小并建立映射关系
+  - 注意: 目标目录应该已经存在,脚本不会创建目录
         """
     )
     build_parser.add_argument('--video_dir', required=True,
-                             help='视频文件所在目录 (环形系统名称将使用此目录的basename)')
-    build_parser.add_argument('--target-start', type=int, required=True,
-                             help='目标目录起始编号 (例如: 1)')
-    build_parser.add_argument('--target-end', type=int, required=True,
-                             help='目标目录结束编号 (例如: 50)')
+                             help='视频文件所在目录')
+    build_parser.add_argument('--target-start', type=str, required=True,
+                             help='目标目录起始名称 (例如: 老号1-1)')
+    build_parser.add_argument('--target-end', type=str, required=True,
+                             help='目标目录结束名称 (例如: 老号1-50)')
     build_parser.add_argument('--base-dir', default=BASE_DIR,
                              help=f'目标目录的基础路径 (默认: {BASE_DIR})')
 
