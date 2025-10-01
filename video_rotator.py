@@ -61,7 +61,7 @@ class VideoRotator:
             logger.error(f"❌ 保存状态文件失败: {e}")
 
     def build_mapping(self, video_dir: str, target_start: str, target_end: str,
-                     base_dir: str = BASE_DIR) -> Dict:
+                     ring_name: str, base_dir: str = BASE_DIR) -> Dict:
         """
         构建视频到目录的映射关系
 
@@ -69,11 +69,16 @@ class VideoRotator:
             video_dir: 视频文件所在目录
             target_start: 目标目录起始名称 (例如: "老号1-1")
             target_end: 目标目录结束名称 (例如: "老号1-50")
+            ring_name: 环形系统名称 (用户指定)
             base_dir: 目标目录的基础路径
 
         Returns:
             Dict: 映射关系
         """
+        # 检查环形名称是否已存在
+        if ring_name in self.states:
+            logger.warning(f"⚠️ 环形系统 '{ring_name}' 已存在，将覆盖原有配置")
+
         # 解析 target_start 和 target_end
         # 例如: "老号1-1" -> prefix="老号1-", start_num=1
         if '-' not in target_start or '-' not in target_end:
@@ -103,9 +108,6 @@ class VideoRotator:
         if start_num > end_num:
             logger.error(f"❌ 起始编号 {start_num} 大于结束编号 {end_num}")
             return {}
-
-        # 环形名称使用前缀 (去掉最后的 '-')
-        ring_name = prefix.rstrip('-')
 
         logger.info(f"\n🔧 开始构建环形系统: {ring_name}")
         logger.info(f"视频目录: {video_dir}")
@@ -362,6 +364,26 @@ class VideoRotator:
         """
         return list(self.states.keys())
 
+    def delete_ring(self, ring_name: str) -> bool:
+        """删除指定的环形系统
+
+        Args:
+            ring_name: 环形系统名称
+
+        Returns:
+            bool: 是否成功删除
+        """
+        if ring_name not in self.states:
+            logger.error(f"❌ 环形系统 '{ring_name}' 不存在")
+            return False
+
+        # 删除环形系统
+        del self.states[ring_name]
+        self._save_states()
+
+        logger.info(f"✅ 环形系统 '{ring_name}' 已删除")
+        return True
+
 
 def main():
     """主函数 - 命令行接口"""
@@ -371,31 +393,31 @@ def main():
         epilog="""
 使用示例:
 
-  1. 构建环形系统 (老号1, 50个目录):
-     python video_rotator.py build --video_dir D:\\videos\\老号1 --target-start 老号1-1 --target-end 老号1-50
+  1. 构建环形系统:
+     python video_rotator.py build --ring-name 老号1 --video_dir E:\\myvideos\\cartoon --target-start 老号1-1 --target-end 老号1-50
 
      说明: 将视频复制到已存在的 D:\\qiyuan\\素材\\老号1-1, 老号1-2, ..., 老号1-50 目录中
-           环形系统名称为 "老号1" (从 --target-start 的前缀提取)
+           video_dir 和 target 目录名称可以完全不同
 
   2. 构建多个环形系统:
-     python video_rotator.py build --video_dir D:\\videos\\老号1 --target-start 老号1-1 --target-end 老号1-50
-     python video_rotator.py build --video_dir D:\\videos\\老号2 --target-start 老号2-1 --target-end 老号2-50
-     python video_rotator.py build --video_dir D:\\videos\\新号1 --target-start 新号1-1 --target-end 新号1-30
+     python video_rotator.py build --ring-name 老号1 --video_dir E:\\videos\\set1 --target-start 老号1-1 --target-end 老号1-50
+     python video_rotator.py build --ring-name 老号2 --video_dir E:\\videos\\set2 --target-start 老号2-1 --target-end 老号2-50
+     python video_rotator.py build --ring-name 新号1 --video_dir F:\\content --target-start 新号1-1 --target-end 新号1-30
 
   3. 列出所有环形系统:
      python video_rotator.py list
 
-  4. 旋转环形系统 (将视频按环形窗口+1的方式重新分配):
+  4. 旋转环形系统:
      python video_rotator.py rotate --name 老号1
 
-     说明: 每次旋转会清空所有目标目录,然后将视频按新的窗口位置复制到对应目录
-           最多可旋转 N 次 (N = 视频数量),确保每个目录都存储过每个视频
-
-  5. 查看指定环形系统状态:
+  5. 查看环形系统状态:
      python video_rotator.py status --name 老号1
+     python video_rotator.py status  # 查看所有
 
-  6. 查看所有环形系统状态:
-     python video_rotator.py status
+  6. 删除环形系统:
+     python video_rotator.py delete --name 老号1
+
+     说明: 只删除配置信息,不会删除目标目录中的视频文件
 
 工作原理:
   - 假设有 10 个视频, 20 个目录
@@ -421,17 +443,20 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例:
-  python video_rotator.py build --video_dir D:\\videos\\老号1 --target-start 老号1-1 --target-end 老号1-50
+  python video_rotator.py build --ring-name 老号1 --video_dir E:\\myvideos\\cartoon --target-start 老号1-1 --target-end 老号1-50
 
   会创建环形系统 "老号1":
-  - 扫描 D:\\videos\\老号1 下的所有视频文件
+  - 扫描 E:\\myvideos\\cartoon 下的所有视频文件
   - 映射到已存在的目录: D:\\qiyuan\\素材\\老号1-1, 老号1-2, ..., 老号1-50
   - 计算窗口大小并建立映射关系
+  - 注意: video_dir 和目标目录名称可以完全不同
   - 注意: 目标目录应该已经存在,脚本不会创建目录
         """
     )
+    build_parser.add_argument('--ring-name', required=True,
+                             help='环形系统名称 (用户自定义,例如: 老号1)')
     build_parser.add_argument('--video_dir', required=True,
-                             help='视频文件所在目录')
+                             help='视频文件所在目录 (任意目录,与目标目录名称无关)')
     build_parser.add_argument('--target-start', type=str, required=True,
                              help='目标目录起始名称 (例如: 老号1-1)')
     build_parser.add_argument('--target-end', type=str, required=True,
@@ -495,6 +520,25 @@ def main():
         """
     )
 
+    # delete 命令
+    delete_parser = subparsers.add_parser(
+        'delete',
+        help='删除指定环形系统',
+        description='删除环形系统的配置信息 (不删除目标目录中的视频文件)',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+示例:
+  python video_rotator.py delete --name 老号1
+
+  注意:
+  - 只删除环形系统的配置信息
+  - 不会删除目标目录中的视频文件
+  - 删除后可以重新构建同名的环形系统
+        """
+    )
+    delete_parser.add_argument('--name', required=True,
+                              help='要删除的环形系统名称')
+
     args = parser.parse_args()
 
     if not args.command:
@@ -505,6 +549,7 @@ def main():
 
     if args.command == 'build':
         logger.info(f"\n🔧 构建环形系统")
+        logger.info(f"  环形名称: {args.ring_name}")
         logger.info(f"  视频目录: {args.video_dir}")
         logger.info(f"  目标范围: {args.target_start} - {args.target_end}")
         logger.info(f"  基础目录: {args.base_dir}")
@@ -513,6 +558,7 @@ def main():
             video_dir=args.video_dir,
             target_start=args.target_start,
             target_end=args.target_end,
+            ring_name=args.ring_name,
             base_dir=args.base_dir
         )
 
@@ -556,6 +602,11 @@ def main():
             logger.info(f"\n📋 所有环形系统 (共 {len(rings)} 个):")
             for i, ring_name in enumerate(rings, 1):
                 logger.info(f"  {i}. {ring_name}")
+
+    elif args.command == 'delete':
+        success = rotator.delete_ring(args.name)
+        if not success:
+            exit(1)
 
 
 if __name__ == "__main__":
