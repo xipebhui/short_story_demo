@@ -324,26 +324,134 @@ class VideoRotator:
 
 def main():
     """主函数 - 命令行接口"""
-    parser = argparse.ArgumentParser(description="视频环形分配器 - 管理多个独立的环形系统")
+    parser = argparse.ArgumentParser(
+        description="视频环形分配器 - 管理多个独立的环形系统",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+使用示例:
+
+  1. 构建环形系统 (老号1, 50个目录):
+     python video_rotator.py build --video_dir D:\\videos\\老号1 --target-start 1 --target-end 50
+
+     说明: 会创建 D:\\qiyuan\\素材\\老号1-1, 老号1-2, ..., 老号1-50 共50个目录
+           环形系统名称为 "老号1" (取自视频目录的basename)
+
+  2. 构建多个环形系统:
+     python video_rotator.py build --video_dir D:\\videos\\老号1 --target-start 1 --target-end 50
+     python video_rotator.py build --video_dir D:\\videos\\老号2 --target-start 1 --target-end 50
+     python video_rotator.py build --video_dir D:\\videos\\新号1 --target-start 1 --target-end 30
+
+  3. 列出所有环形系统:
+     python video_rotator.py list
+
+  4. 旋转环形系统 (将视频按环形窗口+1的方式重新分配):
+     python video_rotator.py rotate --name 老号1
+
+     说明: 每次旋转会清空所有目标目录,然后将视频按新的窗口位置复制到对应目录
+           最多可旋转 N 次 (N = 视频数量),确保每个目录都存储过每个视频
+
+  5. 查看指定环形系统状态:
+     python video_rotator.py status --name 老号1
+
+  6. 查看所有环形系统状态:
+     python video_rotator.py status
+
+工作原理:
+  - 假设有 10 个视频, 20 个目录
+  - 窗口大小 = 目录数 / 视频数 = 20 / 10 = 2
+  - 每个视频对应 2 个目录
+  - 旋转时,窗口整体向前移动 +1
+  - 最大旋转次数 = 10 次 (视频数量)
+  - 旋转 10 次后,每个目录都存储过每个视频
+
+状态保存:
+  - 所有环形系统的状态保存在: ./output/video_rotator_state.json
+  - 支持多个独立的环形系统并存
+        """
+    )
+
     subparsers = parser.add_subparsers(dest='command', help='可用命令')
 
     # build 命令
-    build_parser = subparsers.add_parser('build', help='构建环形映射关系')
-    build_parser.add_argument('--video_dir', required=True, help='视频文件所在目录')
-    build_parser.add_argument('--target-start', type=int, required=True, help='目标目录起始编号')
-    build_parser.add_argument('--target-end', type=int, required=True, help='目标目录结束编号')
-    build_parser.add_argument('--base-dir', default=BASE_DIR, help=f'目标目录的基础路径 (默认: {BASE_DIR})')
+    build_parser = subparsers.add_parser(
+        'build',
+        help='构建环形映射关系',
+        description='创建一个新的环形系统,将视频文件映射到目录窗口',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+示例:
+  python video_rotator.py build --video_dir D:\\videos\\老号1 --target-start 1 --target-end 50
+
+  会创建环形系统 "老号1":
+  - 扫描 D:\\videos\\老号1 下的所有视频文件
+  - 生成目标目录: D:\\qiyuan\\素材\\老号1-1, 老号1-2, ..., 老号1-50
+  - 计算窗口大小并建立映射关系
+        """
+    )
+    build_parser.add_argument('--video_dir', required=True,
+                             help='视频文件所在目录 (环形系统名称将使用此目录的basename)')
+    build_parser.add_argument('--target-start', type=int, required=True,
+                             help='目标目录起始编号 (例如: 1)')
+    build_parser.add_argument('--target-end', type=int, required=True,
+                             help='目标目录结束编号 (例如: 50)')
+    build_parser.add_argument('--base-dir', default=BASE_DIR,
+                             help=f'目标目录的基础路径 (默认: {BASE_DIR})')
 
     # rotate 命令
-    rotate_parser = subparsers.add_parser('rotate', help='旋转指定环形系统的视频')
-    rotate_parser.add_argument('--name', required=True, help='环形系统名称')
+    rotate_parser = subparsers.add_parser(
+        'rotate',
+        help='旋转指定环形系统的视频',
+        description='清空目标目录并按环形窗口+1的方式重新分配视频',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+示例:
+  python video_rotator.py rotate --name 老号1
+
+  执行操作:
+  1. 清空所有目标目录中的视频文件
+  2. 将窗口偏移 +1
+  3. 根据新的窗口位置复制视频到对应目录
+  4. 更新旋转计数
+        """
+    )
+    rotate_parser.add_argument('--name', required=True,
+                              help='环形系统名称 (使用 list 命令查看所有环形系统)')
 
     # status 命令
-    status_parser = subparsers.add_parser('status', help='查看环形系统状态')
-    status_parser.add_argument('--name', help='环形系统名称 (可选，不指定则显示所有)')
+    status_parser = subparsers.add_parser(
+        'status',
+        help='查看环形系统状态',
+        description='显示环形系统的详细状态信息',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+示例:
+  # 查看指定环形系统状态
+  python video_rotator.py status --name 老号1
+
+  # 查看所有环形系统状态
+  python video_rotator.py status
+        """
+    )
+    status_parser.add_argument('--name',
+                              help='环形系统名称 (可选，不指定则显示所有环形系统的状态)')
 
     # list 命令
-    list_parser = subparsers.add_parser('list', help='列出所有环形系统')
+    subparsers.add_parser(
+        'list',
+        help='列出所有环形系统',
+        description='显示当前配置的所有环形系统名称',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+示例:
+  python video_rotator.py list
+
+  输出示例:
+  📋 所有环形系统 (共 3 个):
+    1. 老号1
+    2. 老号2
+    3. 新号1
+        """
+    )
 
     args = parser.parse_args()
 
