@@ -23,7 +23,7 @@ DEBUG_SUBTITLE_LIMIT = 1
 TARGET_DURATION_SECONDS = 60
 
 # 最大播放速度倍数 - 限制最大速度为2.5倍
-MAX_SPEED_FACTOR = 1.5
+MAX_SPEED_FACTOR = 2.0
 # ================================================
 
 import json
