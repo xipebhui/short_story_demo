@@ -153,14 +153,29 @@ class VideoRotator:
         num_videos = len(video_files)
         num_dirs = len(target_dirs)
 
-        # 计算每个视频对应的目录数量（窗口大小）
-        window_size = num_dirs // num_videos if num_videos > 0 else 0
+        # 计算窗口大小和映射模式
+        if num_videos <= num_dirs:
+            # 模式1: 视频数 <= 目录数,每个视频对应多个目录
+            window_size = num_dirs // num_videos if num_videos > 0 else 0
+            videos_per_dir = 1
+            mode = "video_to_dirs"
+            max_rotations = num_videos  # 旋转次数 = 视频数
+        else:
+            # 模式2: 视频数 > 目录数,每个目录对应多个视频
+            window_size = 1  # 每个视频只对应1个目录
+            videos_per_dir = (num_videos + num_dirs - 1) // num_dirs  # 向上取整
+            mode = "dir_to_videos"
+            max_rotations = num_dirs  # 旋转次数 = 目录数
 
         logger.info(f"\n📊 环形窗口配置:")
         logger.info(f"  视频数量: {num_videos}")
         logger.info(f"  目录数量: {num_dirs}")
-        logger.info(f"  窗口大小: {window_size} (每个视频对应 {window_size} 个目录)")
-        logger.info(f"  最大旋转次数: {num_videos}")
+        if mode == "video_to_dirs":
+            logger.info(f"  映射模式: 每个视频对应 {window_size} 个目录")
+            logger.info(f"  最大旋转次数: {max_rotations} (旋转完所有视频)")
+        else:
+            logger.info(f"  映射模式: 每个目录对应约 {videos_per_dir} 个视频")
+            logger.info(f"  最大旋转次数: {max_rotations} (旋转完所有目录)")
 
         # 构建映射关系
         mapping = {
@@ -175,8 +190,10 @@ class VideoRotator:
             "target_end": target_end,
             "target_dirs": target_dirs,
             "window_size": window_size,
+            "videos_per_dir": videos_per_dir,
+            "mode": mode,
             "current_offset": 0,
-            "max_rotations": num_videos,
+            "max_rotations": max_rotations,
             "rotation_count": 0
         }
 
@@ -199,24 +216,56 @@ class VideoRotator:
         videos = state.get('videos', [])
         target_dirs = state.get('target_dirs', [])
         window_size = state.get('window_size', 0)
+        videos_per_dir = state.get('videos_per_dir', 1)
+        mode = state.get('mode', 'video_to_dirs')
         offset = state.get('current_offset', 0)
         rotation_count = state.get('rotation_count', 0)
         max_rotations = state.get('max_rotations', 0)
 
         logger.info(f"\n📍 环形系统 '{ring_name}' 当前映射 (旋转: {rotation_count}/{max_rotations}):")
+        logger.info(f"   模式: {mode}, 偏移: {offset}")
 
-        for i, video in enumerate(videos):
-            video_name = os.path.basename(video)
-            # 计算当前视频对应的目录索引（考虑偏移）
-            start_idx = (i * window_size + offset) % len(target_dirs)
+        if mode == "video_to_dirs":
+            # 模式1: 每个视频对应多个目录
+            # 只显示前5个视频的映射
+            display_count = min(5, len(videos))
+            for i in range(display_count):
+                video = videos[i]
+                video_name = os.path.basename(video)
+                start_idx = (i * window_size + offset) % len(target_dirs)
 
-            assigned_dirs = []
-            for j in range(window_size):
-                dir_idx = (start_idx + j) % len(target_dirs)
-                assigned_dirs.append(os.path.basename(target_dirs[dir_idx]))
+                assigned_dirs = []
+                for j in range(window_size):
+                    dir_idx = (start_idx + j) % len(target_dirs)
+                    assigned_dirs.append(os.path.basename(target_dirs[dir_idx]))
 
-            logger.info(f"  视频 {i+1}: {video_name}")
-            logger.info(f"    → {', '.join(assigned_dirs)}")
+                logger.info(f"  视频 {i+1}: {video_name}")
+                logger.info(f"    → {', '.join(assigned_dirs)}")
+
+            if len(videos) > display_count:
+                logger.info(f"  ... 还有 {len(videos) - display_count} 个视频")
+        else:
+            # 模式2: 每个目录对应多个视频
+            # 只显示前5个目录的映射
+            display_count = min(5, len(target_dirs))
+            for i in range(display_count):
+                dir_idx = (i + offset) % len(target_dirs)
+                dir_name = os.path.basename(target_dirs[dir_idx])
+
+                # 计算该目录对应的视频索引范围
+                assigned_videos = []
+                for j in range(videos_per_dir):
+                    video_idx = (dir_idx + j * len(target_dirs)) % len(videos)
+                    if video_idx < len(videos):
+                        assigned_videos.append(os.path.basename(videos[video_idx]))
+
+                logger.info(f"  目录 {i+1}: {dir_name}")
+                logger.info(f"    → {', '.join(assigned_videos[:3])}")  # 只显示前3个视频
+                if len(assigned_videos) > 3:
+                    logger.info(f"       ... 还有 {len(assigned_videos) - 3} 个视频")
+
+            if len(target_dirs) > display_count:
+                logger.info(f"  ... 还有 {len(target_dirs) - display_count} 个目录")
 
     def rotate(self, ring_name: str) -> bool:
         """
@@ -245,11 +294,14 @@ class VideoRotator:
 
         videos = state['videos']
         target_dirs = state['target_dirs']
-        window_size = state['window_size']
+        window_size = state.get('window_size', 1)
+        videos_per_dir = state.get('videos_per_dir', 1)
+        mode = state.get('mode', 'video_to_dirs')
         current_offset = state['current_offset']
 
         # 1. 清空所有目标目录
         logger.info("\n🧹 清空目标目录...")
+        deleted_count = 0
         for target_dir in target_dirs:
             if os.path.exists(target_dir):
                 # 只删除视频文件，保留目录结构
@@ -257,7 +309,7 @@ class VideoRotator:
                     for file in Path(target_dir).glob(ext):
                         try:
                             os.remove(file)
-                            logger.info(f"  删除: {file}")
+                            deleted_count += 1
                         except Exception as e:
                             logger.error(f"  ❌ 删除失败 {file}: {e}")
             else:
@@ -265,33 +317,62 @@ class VideoRotator:
                 os.makedirs(target_dir, exist_ok=True)
                 logger.info(f"  创建目录: {target_dir}")
 
+        logger.info(f"  删除了 {deleted_count} 个视频文件")
+
         # 2. 旋转偏移 +1
         new_offset = (current_offset + 1) % len(target_dirs)
 
         logger.info(f"\n📦 复制视频到新位置 (偏移: {current_offset} → {new_offset})...")
 
-        # 3. 根据新的偏移复制视频
-        for i, video in enumerate(videos):
-            if not os.path.exists(video):
-                logger.warning(f"⚠️ 视频不存在: {video}")
-                continue
+        # 3. 根据模式复制视频
+        copy_count = 0
+        if mode == "video_to_dirs":
+            # 模式1: 每个视频对应多个目录
+            for i, video in enumerate(videos):
+                if not os.path.exists(video):
+                    logger.warning(f"⚠️ 视频不存在: {video}")
+                    continue
 
-            video_name = os.path.basename(video)
+                video_name = os.path.basename(video)
+                start_idx = (i * window_size + new_offset) % len(target_dirs)
 
-            # 计算当前视频对应的目录索引
-            start_idx = (i * window_size + new_offset) % len(target_dirs)
+                # 复制到对应的目录
+                for j in range(window_size):
+                    dir_idx = (start_idx + j) % len(target_dirs)
+                    target_dir = target_dirs[dir_idx]
+                    target_path = os.path.join(target_dir, video_name)
 
-            # 复制到对应的目录
-            for j in range(window_size):
-                dir_idx = (start_idx + j) % len(target_dirs)
-                target_dir = target_dirs[dir_idx]
-                target_path = os.path.join(target_dir, video_name)
+                    try:
+                        shutil.copy2(video, target_path)
+                        copy_count += 1
+                    except Exception as e:
+                        logger.error(f"  ❌ 复制失败 {video_name} → {target_dir}: {e}")
+        else:
+            # 模式2: 每个目录对应多个视频
+            for i, target_dir in enumerate(target_dirs):
+                dir_idx = (i + new_offset) % len(target_dirs)
 
-                try:
-                    shutil.copy2(video, target_path)
-                    logger.info(f"  ✓ {video_name} → {os.path.basename(target_dir)}/")
-                except Exception as e:
-                    logger.error(f"  ❌ 复制失败 {video_name} → {target_dir}: {e}")
+                # 计算该目录对应的视频
+                for j in range(videos_per_dir):
+                    video_idx = (dir_idx + j * len(target_dirs)) % len(videos)
+                    if video_idx >= len(videos):
+                        break
+
+                    video = videos[video_idx]
+                    if not os.path.exists(video):
+                        logger.warning(f"⚠️ 视频不存在: {video}")
+                        continue
+
+                    video_name = os.path.basename(video)
+                    target_path = os.path.join(target_dir, video_name)
+
+                    try:
+                        shutil.copy2(video, target_path)
+                        copy_count += 1
+                    except Exception as e:
+                        logger.error(f"  ❌ 复制失败 {video_name} → {target_dir}: {e}")
+
+        logger.info(f"  复制了 {copy_count} 个视频文件")
 
         # 4. 更新状态
         state['current_offset'] = new_offset
